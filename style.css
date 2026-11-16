@@ -783,3 +783,70 @@ body:has(dialog[open]) {
   color: #596f64;
   font-size: 13px;
 }
+
+.mark-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 13px;
+  background: #fffdf6;
+  flex-wrap: wrap;
+}
+.mark-options {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 12px;
+  background: #eeeee5;
+}
+.mark-options button {
+  padding: 8px 12px;
+  border-radius: 9px;
+  font-weight: 650;
+  font-size: 14px;
+}
+.mark-options [aria-pressed="true"] {
+  background: white;
+  box-shadow: 0 1px 4px #234b3d26;
+}
+.mark-options [data-mark="visited"][aria-pressed="true"] {
+  background: var(--teal);
+  color: white;
+}
+.mark-options [data-mark="wish"][aria-pressed="true"] {
+  background: #a24d2b;
+  color: white;
+}
+.mark-tools small {
+  color: #5e7169;
+}
+.quick-status button {
+  flex: 1;
+  font-weight: 650;
+}
+.quick-status .wanted {
+  background: #f6e1d0;
+  color: #863f25;
+}
+.quick-status [aria-pressed="true"] {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.edit-trip {
+  padding: 10px 0;
+  border-block: 1px dashed var(--line);
+  margin: 12px 0;
+}
+.edit-trip summary {
+  font-weight: 650;
+  cursor: pointer;
+}
+#toast.show {
+  pointer-events: auto;
+}
+#toast button {
+  color: #faf0c6;
+  text-decoration: underline;
+  padding: 6px;
+}

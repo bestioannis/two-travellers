@@ -139,6 +139,8 @@
       listeners,
       views: new Set(),
       labels: [],
+      terrain: null,
+      water: null,
       index,
       files,
       pending,
@@ -146,6 +148,36 @@
     };
     atlasCache.set(places, shared);
     const repaint = () => listeners.forEach((fn) => fn());
+    let loadingChina = false;
+    function loadRelief(name, file) {
+      const relief = new Image();
+      relief.decoding = "async";
+      relief.onload = () => {
+        shared[name] = relief;
+        repaint();
+      };
+      relief.src = file;
+    }
+    loadRelief("terrain", "./physical/terrain.jpg");
+    shared.loadChina = () => {
+      if (loadingChina) return;
+      loadingChina = true;
+      loadRelief("chinaTerrain", "./physical/china-terrain.jpg");
+    };
+    fetch("./physical/water.json")
+      .then((r) => {
+        if (!r.ok) throw Error(String(r.status));
+        return r.json();
+      })
+      .then((data) => {
+        // Delay parsing a path until its map scale and bounds make it visible.
+        shared.water = {
+          rivers: data.rivers.sort((a, b) => a.r - b.r),
+          lakes: data.lakes.sort((a, b) => a.r - b.r),
+        };
+        repaint();
+      })
+      .catch(() => {});
     fetch("./detail/index.json")
       .then((r) => {
         if (!r.ok) throw Error();
@@ -420,8 +452,6 @@
       c.fillText(label, x - tw / 2, y);
     }
     function drawWater() {
-      c.fillStyle = palette.sea;
-      c.fillRect(0, 0, w, h);
       const step =
         [0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 15, 30, 45, 90].find(
           (s) => s * scale > 58,
@@ -498,6 +528,91 @@
         }
       }, 75);
     }
+    function physical() {
+      if (!shared.terrain && !shared.water) return;
+      // Each country or province is filled individually into the transparent canvas.
+      // source-atop keeps terrain and waterways within that union, including its holes.
+      c.save();
+      c.globalCompositeOperation = "source-atop";
+      // The higher resolution China raster is an exact crop of the same source.
+      const chinaBox = [252, 35, 316, 75];
+      if (visible(chinaBox) && (state.scope === "china" || scale > 16))
+        shared.loadChina();
+      const china = visible(chinaBox) ? shared.chinaTerrain : null;
+      c.imageSmoothingEnabled = true;
+      c.globalAlpha = clamp(
+        0.9 - Math.max(0, Math.log2(scale / 12)) * 0.075,
+        0.36,
+        0.9,
+      );
+      function drawTerrain(image, box) {
+        if (!image) return;
+        const x = Math.max(clip[0], box[0]),
+          y = Math.max(clip[1], box[1]);
+        const width = Math.min(clip[2], box[2]) - x,
+          height = Math.min(clip[3], box[3]) - y;
+        if (width <= 0 || height <= 0) return;
+        const dx = image.naturalWidth / (box[2] - box[0]),
+          dy = image.naturalHeight / (box[3] - box[1]);
+        c.drawImage(
+          image,
+          (x - box[0]) * dx,
+          (y - box[1]) * dy,
+          width * dx,
+          height * dy,
+          x,
+          y,
+          width,
+          height,
+        );
+      }
+      if (china) {
+        if (
+          clip[0] < chinaBox[0] ||
+          clip[2] > chinaBox[2] ||
+          clip[1] < chinaBox[1] ||
+          clip[3] > chinaBox[3]
+        ) {
+          c.save();
+          c.beginPath();
+          c.rect(0, 0, 360, 180);
+          c.rect(252, 35, 64, 40);
+          c.clip("evenodd");
+          drawTerrain(shared.terrain, [0, 0, 360, 180]);
+          c.restore();
+        }
+        drawTerrain(china, chinaBox);
+      } else drawTerrain(shared.terrain, [0, 0, 360, 180]);
+      c.globalAlpha = 1;
+      if (shared.water) {
+        const maxRank = clamp(Math.floor(2 + Math.log2(scale) * 1.4), 2, 12);
+        for (const layer of ["lakes", "rivers"]) {
+          const river = layer === "rivers";
+          c.strokeStyle = river ? "#70a4af" : "#84b4b7";
+          c.fillStyle = "#a3cbd0";
+          for (const item of shared.water[layer]) {
+            if (item.r > maxRank) break;
+            if (!visible(item.b)) continue;
+            if (!item.path) {
+              item.path = asPath(item.d);
+              delete item.d;
+            }
+            if (!item.path) continue;
+            c.lineWidth =
+              (river
+                ? clamp(
+                    0.7 + Math.log2(scale + 1) * 0.13 - item.r * 0.07,
+                    0.4,
+                    1.7,
+                  )
+                : 0.5) / scale;
+            if (!river) c.fill(item.path, "evenodd");
+            c.stroke(item.path);
+          }
+        }
+      }
+      c.restore();
+    }
     function land() {
       c.save();
       c.translate(w / 2 - cx * scale, h / 2 - cy * scale);
@@ -507,12 +622,15 @@
       c.fillStyle = palette.land;
       c.strokeStyle = palette.border;
       c.lineWidth = 0.7 / scale;
-      for (const e of state.scope === "china" ? chinaBase : base)
-        if (shapeVisible(e)) {
-          const path = pathFor(e);
-          c.fill(path, "evenodd");
-          c.stroke(path);
-        }
+      const shapes = [];
+      for (const e of state.scope === "china" ? chinaBase : base) {
+        if (!shapeVisible(e)) continue;
+        const path = pathFor(e);
+        shapes.push(path);
+        c.fill(path, "evenodd");
+      }
+      if (shapes.length) physical();
+      for (const path of shapes) c.stroke(path);
       const isArea =
         state.layer === "region" ||
         state.layer === "prefecture" ||
@@ -529,10 +647,10 @@
           if (stat || selected) {
             c.fillStyle =
               stat === "visited"
-                ? "#a6cab5"
+                ? "rgba(86,159,122,.55)"
                 : stat === "wish"
-                  ? "#eeb79c"
-                  : "#e3c890";
+                  ? "rgba(223,140,105,.54)"
+                  : "rgba(211,174,108,.55)";
             c.fill(path, "evenodd");
           }
           c.strokeStyle = selected
@@ -718,7 +836,7 @@
       const shown = placement(scale),
         visibleIds = new Set();
       points = [];
-      function point(p, label) {
+      function point(p, label, labelRadius = 0) {
         const { x, y } = screen(+p.lon + 180, 90 - +p.lat);
         if (x < -130 || x > w + 130 || y < -40 || y > h + 40) return;
         const stat = statusOf(state.records, p.id),
@@ -729,7 +847,7 @@
           scale < 8 &&
           w > 440 &&
           Object.hasOwn(illustrations, p.name);
-        points.push({ p, x, y, sel, stat, label, illustrated });
+        points.push({ p, x, y, sel, stat, label, labelRadius, illustrated });
       }
       for (const n of shown) {
         const a = screen(n.wx, n.wy);
@@ -749,7 +867,7 @@
           c.restore();
         } else {
           visibleIds.add(n.p.id);
-          point(n.p, true);
+          point(n.p, true, n.rx);
         }
       }
       // A recorded marker remains selectable even if its label cannot yet fit.
@@ -850,8 +968,14 @@
         b = worldCoord(w, h);
       clip = [a.x, a.y, b.x, b.y];
       c.setTransform(px, 0, 0, px, 0, 0);
-      drawWater();
+      c.clearRect(0, 0, w, h);
       land();
+      c.save();
+      c.globalCompositeOperation = "destination-over";
+      drawWater();
+      c.fillStyle = palette.sea;
+      c.fillRect(0, 0, w, h);
+      c.restore();
       geography();
       pins();
       compass();
@@ -861,6 +985,14 @@
       let best = null,
         score = Infinity;
       for (const q of points) {
+        // The painted name is part of the same touch target as its pin.
+        if (
+          q.label &&
+          Math.abs(x - q.x) <= q.labelRadius &&
+          y >= q.y + 3 &&
+          y <= q.y + 21
+        )
+          return q.p.id;
         const d = dist(
           { x, y },
           { x: q.x, y: q.y - (q.illustrated ? 10 : q.stat || q.sel ? 6 : 0) },

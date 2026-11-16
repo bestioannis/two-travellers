@@ -2,6 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
+    <meta name="referrer" content="no-referrer" />
     <meta
       name="viewport"
       content="width=device-width,initial-scale=1,viewport-fit=cover"
@@ -76,10 +77,15 @@
                 </button>
               </div>
             </div>
-            <div class="legend">
-              <span><em class="dot visited"></em>去过</span
-              ><span><em class="dot wish"></em>想去</span
-              ><small>点击地点查看旅行资料</small>
+            <div class="mark-tools" aria-label="地图操作">
+              <div class="mark-options" role="group" aria-label="标记模式">
+                <button data-mark="browse" aria-pressed="true">浏览</button>
+                <button data-mark="visited" aria-pressed="false">
+                  ✓ 标去过
+                </button>
+                <button data-mark="wish" aria-pressed="false">♡ 标想去</button>
+              </div>
+              <small id="mark-hint">点地点或地名查看</small>
             </div>
           </article>
           <aside>

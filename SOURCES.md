@@ -28,3 +28,11 @@
 - Natural Earth 三份原始 ZIP 分别保存为 `admin_0_countries.zip`、`admin_1_states_provinces.zip`、`populated_places.zip`。保留压缩包内的原始文件名。
 - DataV 全国省级集合保存为 `china.json`，各省地级集合保存为 `cn-省级六位编码.json`。367 份各区划独立文件放在 `cn-detail/六位行政编码.json`。
 - 应用目录包含既有的 `atlas.json` 和 `world.json`。安装 Python `pyshp` 后，从应用根目录运行 `python datasets/build_detail.py /绝对路径/源数据目录 .`。脚本更新目录中的国家编码，并重建 `detail/` 中的视野索引和边界分块。
+
+## 自然地理底图
+
+山脉起伏与地表颜色来自 Natural Earth 的 [Cross-blended Hypsometric Tints with Shaded Relief](https://www.naturalearthdata.com/downloads/10m-raster-data/10m-cross-blend-hypso/)（1:10m，HYP_LR_SR 3.2.0）。它将地形晕渲与按地势和气候调整的分层设色结合。原始图像为 WGS84 等距圆柱投影、16,200 × 8,100 像素；应用内的世界全图采用 4,096 × 2,048 像素 JPEG。
+
+水系来自 Natural Earth 1:10m 的[河流与湖心线](https://www.naturalearthdata.com/downloads/10m-physical-vectors/10m-rivers-lake-centerlines/)与[湖泊、水库](https://www.naturalearthdata.com/downloads/10m-physical-vectors/10m-lakes/) 5.0.0。保留 1,214 个河流或运河要素与 1,355 个湖泊、水库等水面要素，按原始制图等级供不同缩放级别选择。湖心线是用于连接河网的辅助线，地图在湖面内省略这些线条。两类底图均来自 [Natural Earth 公有领域资料](https://www.naturalearthdata.com/about/terms-of-use/)。
+
+中国视图另截取东经 72° 至 136°、北纬 15° 至 55° 的原分辨率地形（2,880 × 1,800 像素），覆盖上述范围内的大陆、台湾及附近岛屿。范围外使用世界全图。两幅影像取自同一份地形数据。

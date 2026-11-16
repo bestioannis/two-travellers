@@ -4,7 +4,7 @@
   const url = (config.url || "").replace(/\/+$/, "");
   const key = config.publishableKey || "";
   const configured =
-    /^https:\/\/[^/]+$/.test(url) &&
+    /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url) &&
     (key.startsWith("sb_publishable_") || isLegacyAnon(key));
   const prefix =
     "two-travellers/v1/" + new URL("./", location.href).pathname + "/";
@@ -172,6 +172,7 @@
   }
 
   async function api(path, token, body, headers = {}) {
+    if (!configured) throw new Error("当前护照仅保存在本机。");
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 18000);
     try {
@@ -187,6 +188,7 @@
         signal: controller.signal,
         cache: "no-store",
         credentials: "omit",
+        redirect: "error",
       });
       const text = await response.text();
       let result;

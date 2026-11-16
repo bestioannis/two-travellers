@@ -71,11 +71,30 @@ let places = [],
   page = "map";
 const S = window.TravelStore;
 let msgTimer;
-function notify(text) {
+function notify(text, undo) {
   $("toast").textContent = text;
   $("toast").className = "show";
   clearTimeout(msgTimer);
-  msgTimer = setTimeout(() => ($("toast").className = ""), 2200);
+  if (undo) {
+    const button = document.createElement("button");
+    button.textContent = "撤销";
+    button.onclick = async () => {
+      button.disabled = true;
+      try {
+        await undo();
+      } catch (e) {
+        handle(e);
+      }
+    };
+    $("toast").append(" ", button);
+  }
+  msgTimer = setTimeout(
+    () => {
+      $("toast").className = "";
+      $("toast").replaceChildren();
+    },
+    undo ? 6500 : 2200,
+  );
 }
 function handle(err) {
   notify(err.message || "操作失败，请重试");
@@ -333,6 +352,54 @@ function inspiration() {
   });
   $("inspiration").innerHTML = html.join("");
 }
+let markMode = "browse";
+document.querySelectorAll("[data-mark]").forEach(
+  (b) =>
+    (b.onclick = () => {
+      markMode = b.dataset.mark;
+      document
+        .querySelectorAll("[data-mark]")
+        .forEach((t) => t.setAttribute("aria-pressed", t === b));
+      $("mark-hint").textContent =
+        markMode === "browse" ? "点地点或地名查看" : "连续点选地点即可标记";
+    }),
+);
+async function markPlace(id, next, fields) {
+  const previous = S.records()[id] || null;
+  const record = {
+    status: next,
+    note: previous?.note || "",
+    date: previous?.date || "",
+    ...fields,
+  };
+  await S.save(id, record);
+  const name = byId.get(id).name;
+  notify(
+    name + " · " + (next === "visited" ? "已标去过" : "已标想去"),
+    async () => {
+      const current = S.records()[id];
+      if (
+        !current ||
+        current.status !== record.status ||
+        current.note !== record.note ||
+        current.date !== record.date
+      ) {
+        notify("这条记录已更新");
+        return;
+      }
+      await S.save(id, previous);
+      notify("已撤销标记");
+    },
+  );
+}
+function chooseOnMap(id) {
+  if (markMode === "browse") {
+    showPlace(id);
+    return;
+  }
+  selected = id;
+  markPlace(id, markMode).catch(handle);
+}
 function showPlace(id, fly = false) {
   const p = byId.get(id);
   if (!p) return;
@@ -350,7 +417,7 @@ function showPlace(id, fly = false) {
     controller?.focus(id);
   } else mapUpdate();
   const r = S.records()[id] || { note: "", date: "", status: "" };
-  let status = r.status;
+  const status = r.status;
   const links = [];
   function link(label, url) {
     try {
@@ -364,6 +431,15 @@ function showPlace(id, fly = false) {
         );
     } catch {}
   }
+  link(
+    "Apple 地图",
+    "https://maps.apple.com/?ll=" +
+      p.lat +
+      "," +
+      p.lon +
+      "&q=" +
+      encodeURIComponent(p.name),
+  );
   link(
     "地理与历史",
     p.wiki?.startsWith("https://")
@@ -383,50 +459,49 @@ function showPlace(id, fly = false) {
   $("detail").innerHTML =
     "<h2>" +
     esc(p.name) +
-    "</h2><p>" +
+    '</h2><div class="quick-status actions">' +
+    btn("visited", "✓ 去过", "primary") +
+    btn("wish", "♡ 想去", "wanted") +
+    '</div><p id="form-msg" role="status">' +
+    (status
+      ? "当前标记 · " + (status === "visited" ? "去过" : "想去")
+      : "点选即保存") +
+    "</p>" +
+    '<details class="edit-trip" ' +
+    (r.note || r.date ? "open" : "") +
+    '><summary>日期和手记</summary><label for="trip-date">旅行日期</label><input type="date" id="trip-date" value="' +
+    esc(r.date) +
+    '"><label for="note">旅行手记</label><textarea rows="3" maxlength="6000" id="note" placeholder="记下那天的回忆或下一次的计划"></textarea>' +
+    (status
+      ? '<div class="actions">' + btn("save", "保存手记", "primary") + "</div>"
+      : "<p>填写后，点上方「去过」或「想去」保存。</p>") +
+    "</details>" +
+    "<p>" +
     esc(p.overview || p.name + "位于" + p.country + "。") +
     "</p>" +
     (p.sights ? "<h3>景点与周边</h3><p>" + esc(p.sights) + "</p>" : "") +
     (p.tip ? "<h3>旅行提示</h3><p>" + esc(p.tip) + "</p>" : "") +
     '<div class="actions">' +
     links.join("") +
-    '</div><hr style="border:0;border-top:1px dashed var(--line);margin:18px 0"><h3>我们的旅行标记</h3><div class="actions">' +
-    btn("visited", "✓ 去过") +
-    btn("wish", "♡ 想去", "wanted") +
-    '</div><label for="trip-date">旅行日期</label><input type="date" id="trip-date" value="' +
-    esc(r.date) +
-    '"><label for="note">旅行手记</label><textarea rows="3" maxlength="6000" id="note" placeholder="记下那天的回忆，或下次想一起做的事…"></textarea><div class="actions">' +
-    btn("save", "保存标记", "primary") +
-    (r.status ? btn("remove", "移除标记") : "") +
-    '</div><p id="form-msg" role="status"></p>';
+    "</div>" +
+    (status
+      ? '<div class="actions">' + btn("remove", "移除标记") + "</div>"
+      : "");
   $("note").value = r.note;
-  function select(s) {
-    status = s;
-    ["visited", "wish"].forEach((k) => {
-      $(k).classList.toggle("chosen", k === s);
-      $(k).setAttribute("aria-pressed", k === s);
-    });
-  }
-  select(status);
-  $("visited").onclick = () => select("visited");
-  $("wish").onclick = () => select("wish");
-  $("save").onclick = async () => {
-    if (!status) {
-      $("form-msg").textContent = "先选「去过」或「想去」，再保存。";
-      return;
-    }
+  async function commit(next) {
+    const record = { date: $("trip-date").value, note: $("note").value };
     try {
-      await S.save(id, {
-        status,
-        note: $("note").value,
-        date: $("trip-date").value,
-      });
+      await markPlace(id, next, record);
       $("sheet").close();
-      notify("已保存到旅行护照");
     } catch (e) {
       $("form-msg").textContent = e.message;
     }
-  };
+  }
+  for (const next of ["visited", "wish"]) {
+    $(next).setAttribute("aria-pressed", next === status);
+    $(next).onclick = () => commit(next);
+  }
+  if ($("save")) $("save").onclick = () => commit(status);
   if ($("remove"))
     $("remove").onclick = async () => {
       try {
@@ -440,7 +515,16 @@ function showPlace(id, fly = false) {
 }
 document.body.addEventListener("click", (e) => {
   const b = e.target.closest("[data-place]");
-  if (b) showPlace(b.dataset.place, !!b.closest("#results,#inspiration"));
+  if (b) {
+    if (
+      page === "map" &&
+      markMode !== "browse" &&
+      b.closest("#results,#inspiration")
+    ) {
+      $("results").hidden = true;
+      chooseOnMap(b.dataset.place);
+    } else showPlace(b.dataset.place, !!b.closest("#results,#inspiration"));
+  }
   if (!e.target.closest(".search-wrap")) $("results").hidden = true;
 });
 function search() {
@@ -509,7 +593,7 @@ function account() {
       : a.configured
         ? '<form id="loginForm"><label for="email">邮箱</label><input id="email" required type="email" autocomplete="username"><label for="password">密码</label><input id="password" required type="password" autocomplete="current-password"><div class="actions"><button class="action primary">登录并同步</button></div></form>'
         : "<p>当前记录保存在这台设备。连接项目的 Supabase 后，两个人可用各自的账号登录，共享标记和手记。</p>") +
-    '<h3>个人数据存在哪里？</h3><p>未登录时，标记、日期和手记保存在这台设备的浏览器中。开通同步并登录后，记录也会保存在你们的 Supabase 数据库，仅两位获准成员可通过应用访问。GitHub 公开托管网页代码和地图资料。导出的备份由你保管。</p><h3>备份与恢复</h3><p>导出 JSON 可留存整本护照。导入会合并地点，相同地点使用备份中的记录。</p><div class="actions">' +
+    '<h3>个人数据存在哪里？</h3><p>未登录时，标记、日期和手记保存在当前浏览器或主屏幕 App 的网站存储（localStorage）中。它们不会提交到 GitHub，也不会自动生成「文件」中的文档。清除网站数据可能删除记录，想留一份独立文件可点「导出备份」。开通同步并登录后，记录也会保存在你们的 Supabase 数据库，仅两位获准成员可通过应用访问。GitHub 公开托管网页代码和地图资料。导出的备份由你保管。</p><h3>备份与恢复</h3><p>导出 JSON 可留存整本护照。导入会合并地点，相同地点使用备份中的记录。</p><div class="actions">' +
     btn("export", "导出备份") +
     btn("import", "导入备份") +
     '</div><input type="file" accept=".json,application/json" id="file" hidden><p id="account-msg" role="status"></p><h3>装到 iPhone</h3><p>在 Safari 打开网站，点分享菜单，选择「添加到主屏幕」。</p><p><a href="SOURCES.md" target="_blank" rel="noopener">地图与目的地资料来源 ↗</a></p>';
@@ -572,7 +656,7 @@ async function boot() {
     controller = TravelMap.mount($("atlas"), {
       places,
       world,
-      onSelect: (id) => showPlace(id),
+      onSelect: chooseOnMap,
     });
     inspiration();
     $("loading").hidden = true;

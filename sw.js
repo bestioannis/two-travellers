@@ -1,5 +1,5 @@
-const version="cd54d28fd4f1b5";
-const files=["./SOURCES.md", "./app.js", "./assets/apple-touch-icon.png", "./assets/icon-192.png", "./assets/icon-512.png", "./assets/kyoto.jpg", "./assets/paris.jpg", "./assets/singapore.jpg", "./atlas.json", "./config.js", "./detail/index.json", "./index.html", "./manifest.webmanifest", "./map.css", "./map.js", "./store.js", "./style.css", "./world.json"];
+const version="0065af52d616fa";
+const files=["./SOURCES.md", "./app.js", "./assets/apple-touch-icon.png", "./assets/icon-192.png", "./assets/icon-512.png", "./assets/kyoto.jpg", "./assets/paris.jpg", "./assets/singapore.jpg", "./atlas.json", "./config.js", "./detail/index.json", "./index.html", "./manifest.webmanifest", "./map.css", "./map.js", "./physical/china-terrain.jpg", "./physical/terrain.jpg", "./physical/water.json", "./store.js", "./style.css", "./world.json"];
 
 const prefix='two-travellers:'+self.registration.scope+':';
 const cacheName=prefix+version;
