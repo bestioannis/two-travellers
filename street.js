@@ -77,6 +77,15 @@ const groups = {
   highway: { edge: "#c8a182", line: "#ecc99d", w: 5.5 },
   rail: { line: "#9a9e9a", w: 1.3, dash: true, min: 8 },
 };
+const transitStyles = {
+  subway: { line: "#8950aa", w: 4 },
+  lightRail: { line: "#198274", w: 3.5 },
+  rail: { line: "#4476b3", w: 3 },
+};
+const fade = (value) => {
+  const t = clamp(value, 0, 1);
+  return t * t * (3 - 2 * t);
+};
 const greens = new Set([
   "park",
   "grass",
@@ -119,7 +128,11 @@ function paintGroup(layer, props, type) {
       if (type !== 2) return;
       if (cls === "motorway" || cls === "trunk") return "highway";
       if (["primary", "secondary", "tertiary"].includes(cls)) return "arterial";
-      if (["rail", "transit"].includes(cls)) return "rail";
+      if (["rail", "transit"].includes(cls)) {
+        if (props.subclass === "subway") return "subway";
+        if (["light_rail", "tram"].includes(props.subclass)) return "lightRail";
+        return "rail";
+      }
       if (["path", "track"].includes(cls)) return "path";
       if (cls === "service") return "service";
       return "street";
@@ -148,6 +161,7 @@ function labelRule(layer, props) {
           : 14,
       1,
     ];
+  if (layer === "poi" && props.class === "railway") return [11, -1];
   if (layer === "poi") return [(props.rank ?? 4) < 4 ? 14.5 : 16, 3];
   return [12, 2];
 }
@@ -249,6 +263,7 @@ async function load(key, z, x, y) {
     if (!response.ok) throw Error(String(response.status));
     const data = await response.arrayBuffer();
     const decoded = decodeTile(data, z, x, y);
+    decoded.arrived = performance.now();
     decoded.bytes = data.byteLength;
     tiles.set(key, decoded);
     // Prefer the active neighborhood and bound memory even in dense city centers.
@@ -267,7 +282,7 @@ async function load(key, z, x, y) {
     notify();
   }
 }
-function paintTile(ctx, tile, atX, atY, scale, zoom, box, candidates) {
+function paintTile(ctx, tile, atX, atY, scale, zoom, box, candidates, transit) {
   const k = (tile.width * scale) / extent,
     height = tile.height * scale;
   ctx.save();
@@ -281,9 +296,20 @@ function paintTile(ctx, tile, atX, atY, scale, zoom, box, candidates) {
   const growth = 2 ** clamp((zoom - 13) * 0.27, -1.3, 2.2);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  for (const [name, style] of Object.entries(groups)) {
+  const baseAlpha = ctx.globalAlpha;
+  for (const name of [...Object.keys(groups), "lightRail", "subway"]) {
+    const transport = transitStyles[name];
+    const style = transport
+      ? transit
+        ? transport
+        : groups.rail
+      : groups[name];
     const p = tile.paths.get(name);
     if (!p || zoom < (style.min || 0)) continue;
+    ctx.globalAlpha =
+      baseAlpha *
+      fade((zoom - (style.min || 0)) * 2) *
+      (transit && style.edge ? 0.5 : 1);
     if (style.fill) {
       ctx.fillStyle = style.fill;
       ctx.fill(p, "evenodd");
@@ -304,11 +330,19 @@ function paintTile(ctx, tile, atX, atY, scale, zoom, box, candidates) {
   }
   ctx.restore();
   for (const label of tile.labels) {
-    if (zoom < label.min) continue;
+    const station = label.order === -1;
+    const min = station && !transit ? 15 : label.min;
+    if (zoom < min || (transit && label.order === 3)) continue;
     const x = atX + label.x * k,
       y = atY + label.y * k;
     if (x < -30 || x > box.w + 30 || y < 0 || y > box.h) continue;
-    candidates.push({ l: label, x, y });
+    if (x >= box.left && x < box.right && y >= box.top && y < box.bottom)
+      candidates.push({
+        l: label,
+        x,
+        y,
+        alpha: baseAlpha * fade((zoom - min) * 2),
+      });
   }
 }
 function paintLabels(ctx, candidates) {
@@ -316,6 +350,7 @@ function paintLabels(ctx, candidates) {
     (a, b) =>
       a.l.order - b.l.order ||
       a.l.rank - b.l.rank ||
+      b.alpha - a.alpha ||
       a.l.text.localeCompare(b.l.text),
   );
   const occupied = [],
@@ -323,7 +358,7 @@ function paintLabels(ctx, candidates) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.lineJoin = "round";
-  for (const { l, x, y } of candidates) {
+  for (const { l, x, y, alpha } of candidates) {
     const near = repeated.get(l.text);
     if (near?.some((q) => Math.abs(x - q.x) < 140 && Math.abs(y - q.y) < 95))
       continue;
@@ -343,6 +378,16 @@ function paintLabels(ctx, candidates) {
     occupied.push({ x, y, rx, ry });
     if (near) near.push({ x, y });
     else repeated.set(l.text, [{ x, y }]);
+    ctx.globalAlpha = alpha;
+    if (l.order === -1) {
+      ctx.beginPath();
+      ctx.arc(x, y - 10, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#604784";
+      ctx.stroke();
+    }
     ctx.lineWidth = 3;
     ctx.strokeStyle = "#fffcf4";
     ctx.strokeText(l.text, x, y);
@@ -351,20 +396,18 @@ function paintLabels(ctx, candidates) {
     ctx.fillText(l.text, x, y);
   }
 }
-export const streetThreshold = 6;
+let fadeFrame = 0;
+export const streetThreshold = 5;
 // The atlas provides an existing land silhouette for China/Taiwan. source-atop also
 // clips street names and buildings, including cross-border features inside an MVT buffer.
-export function paintStreets(
-  ctx,
-  { clip, scale, px, w, h, scope, allowRequests },
-) {
+export function paintStreets(ctx, { clip, scale, px, w, h, scope, transit }) {
   const zoom = Math.log2((scale * 360) / 512);
   if (zoom < streetThreshold) return "hidden";
   if (!template) {
-    if (allowRequests) readCatalog();
+    readCatalog();
     return Date.now() < retryCatalog ? "offline" : "loading";
   }
-  const z = clamp(Math.floor(zoom), 0, maxSourceZoom),
+  const z = clamp(Math.ceil(zoom), 0, maxSourceZoom),
     n = 2 ** z;
   const xmin = clamp(Math.floor(tileX(clip[0] - 180, z)), 0, n - 1),
     xmax = clamp(Math.floor(tileX(clip[2] - 180, z)), 0, n - 1);
@@ -387,20 +430,63 @@ export function paintStreets(
   ctx.save();
   ctx.setTransform(px, 0, 0, px, 0, 0);
   if (scope !== "world") ctx.globalCompositeOperation = "source-atop";
+  const now = performance.now();
+  let animating = false;
   for (const { x, y, key } of wanted) {
     const tile = tiles.get(key);
     if (!tile) {
       failed ||= Date.now() < (failures.get(key) || 0);
-      if (allowRequests && inFlight.size < 3) load(key, z, x, y);
-      continue;
+      if (inFlight.size < 5) load(key, z, x, y);
     }
-    tiles.delete(key);
-    tiles.set(key, tile);
-    loaded++;
-    const atX = (x * tile.width - clip[0]) * scale,
-      atY = (90 - tile.north - clip[1]) * scale;
-    paintTile(ctx, tile, atX, atY, scale, zoom, { w, h }, candidates);
+    const width = 360 / n;
+    const left = (x * width - clip[0]) * scale;
+    const top = (90 - tileLat(y, z) - clip[1]) * scale;
+    const right = left + width * scale;
+    const bottom = (90 - tileLat(y + 1, z) - clip[1]) * scale;
+    const box = { w, h, left, top, right, bottom };
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(left, top, right - left, bottom - top);
+    ctx.clip();
+    const opacity = fade(zoom - streetThreshold);
+    function draw(t, alpha) {
+      ctx.globalAlpha = opacity * alpha;
+      if (ctx.globalAlpha <= 0) return;
+      const atX = (t.x * t.width - clip[0]) * scale;
+      const atY = (90 - t.north - clip[1]) * scale;
+      paintTile(ctx, t, atX, atY, scale, zoom, box, candidates, transit);
+      loaded++;
+    }
+    let parent;
+    for (let d = 1; d <= z && !parent; d++) {
+      parent = tiles.get([z - d, x >> d, y >> d].join("/"));
+    }
+    const childAlpha = tile ? fade((now - tile.arrived) / 220) : 0;
+    const blend =
+      childAlpha *
+      (parent && z === Math.ceil(zoom) ? fade((zoom - z + 1) * 2) : 1);
+    if (blend < 1) {
+      if (parent) draw(parent, 1);
+      else
+        for (let dx = 0; dx < 2; dx++)
+          for (let dy = 0; dy < 2; dy++) {
+            const child = tiles.get([z + 1, x * 2 + dx, y * 2 + dy].join("/"));
+            if (child) draw(child, 1);
+          }
+    }
+    if (tile) {
+      tiles.delete(key);
+      tiles.set(key, tile);
+      draw(tile, blend);
+      animating ||= childAlpha < 1;
+    }
+    ctx.restore();
   }
+  if (animating && !fadeFrame)
+    fadeFrame = requestAnimationFrame(() => {
+      fadeFrame = 0;
+      notify();
+    });
   paintLabels(ctx, candidates);
   ctx.restore();
   return loaded ? "ready" : failed ? "offline" : "loading";

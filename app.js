@@ -23,7 +23,8 @@ const types = {
   country: "国家及地区",
   region: "省 / 州",
   city: "旅行城市",
-  prefecture: "地级行政区",
+  prefecture: "地市及直辖县",
+  county: "区 / 县",
   sight: "主要景点",
 };
 const titles = {
@@ -66,6 +67,7 @@ let places = [],
   worldShapes,
   statsScope = "world",
   scope = "world",
+  transit = false,
   layer = "country",
   selected = "",
   filter = "visited",
@@ -119,9 +121,7 @@ function layers() {
   let keys =
     scope === "world"
       ? ["country", "city", "region"]
-      : scope === "taiwan"
-        ? ["prefecture", "sight", "city"]
-        : ["prefecture", "region", "sight", "city"];
+      : ["prefecture", "county", "region", "sight", "city"];
   $("layer").innerHTML = keys
     .map((k) => '<option value="' + k + '">' + types[k] + "</option>")
     .join("");
@@ -131,7 +131,7 @@ function layers() {
     .forEach((b) => b.classList.toggle("active", b.dataset.scope === scope));
 }
 function mapUpdate() {
-  controller?.update({ scope, layer, records: S.records(), selected });
+  controller?.update({ scope, layer, transit, records: S.records(), selected });
 }
 document.querySelectorAll("[data-scope]").forEach(
   (b) =>
@@ -149,6 +149,13 @@ document.querySelectorAll("[data-scope]").forEach(
 $("layer").onchange = (e) => {
   layer = e.target.value;
   selected = "";
+  mapUpdate();
+};
+$("transit").onclick = () => {
+  transit = !transit;
+  $("transit").setAttribute("aria-pressed", String(transit));
+  if (transit)
+    notify("放大到城市查看线路和车站 · 紫色地铁 / 绿色轻轨 / 蓝色铁路");
   mapUpdate();
 };
 $("plus").onclick = () => controller?.zoom(1.55);
@@ -407,11 +414,7 @@ function showPlace(id, fly = false) {
   $("results").hidden = true;
   if (fly) {
     location.hash = "map";
-    scope = p.taiwan
-      ? "taiwan"
-      : p.type === "prefecture" || (p.type === "sight" && p.country === "中国")
-        ? "china"
-        : "world";
+    scope = p.country === "中国" && p.type !== "country" ? "china" : "world";
     layer = p.type;
     layers();
     navigate();
@@ -486,7 +489,7 @@ function showPlace(id, fly = false) {
     $("street-view").onclick = () => {
       $("sheet").close();
       location.hash = "map";
-      scope = p.taiwan ? "taiwan" : p.country === "中国" ? "china" : "world";
+      scope = p.country === "中国" && p.type !== "country" ? "china" : "world";
       layer = p.type;
       layers();
       navigate();

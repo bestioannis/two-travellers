@@ -91,14 +91,6 @@
   const atlasCache = new WeakMap();
   const chinese = (p) => ["中国", "China", "CN"].includes(p.country);
   const maxScale = (2 ** 20 * 512) / 360;
-  const taiwan = (p) =>
-    p.taiwan ||
-    (p.type === "city" &&
-      chinese(p) &&
-      p.lon >= 120 &&
-      p.lon < 122.2 &&
-      p.lat > 21.8 &&
-      p.lat < 25.5);
   let streetLibrary;
   function streets() {
     return (streetLibrary ||= import("./street.js").catch((error) => {
@@ -327,10 +319,6 @@
       .filter(chinese)
       .map((p) => geom.get(p.id))
       .filter(Boolean);
-    const taiwanBase = (grouped.get("prefecture") || [])
-      .filter(taiwan)
-      .map((p) => geom.get(p.id))
-      .filter(Boolean);
     const countryForShape = new Map();
     for (const p of grouped.get("country") || [])
       for (const id of p.worldIds || []) countryForShape.set(id, p);
@@ -346,7 +334,7 @@
       streetRetry = 0,
       countryAreas = [];
     function renderStreets() {
-      const enabled = scale >= (512 * 64) / 360;
+      const enabled = scale >= (512 * 32) / 360;
       credit.hidden = !enabled;
       if (!enabled) return;
       if (!streetEngine && !streetPending && Date.now() > streetRetry) {
@@ -372,7 +360,7 @@
           w,
           h,
           scope: state.scope,
-          allowRequests: !motion && !pointers.size,
+          transit: state.transit,
         }) || (streetRetry > Date.now() ? "offline" : "loading");
       const notice =
         status === "loading"
@@ -428,26 +416,25 @@
                   (b.type === "region" ? -1 : 0),
               )
           : grouped.get(state.layer) || [];
-      filtered =
-        state.scope === "taiwan"
-          ? list.filter(taiwan)
-          : state.scope === "china"
-            ? list.filter(chinese)
-            : list;
+      filtered = state.scope === "china" ? list.filter(chinese) : list;
+      if (state.scope === "china" && state.layer === "prefecture") {
+        filtered = filtered
+          .concat(
+            byId.get("cn-810000"),
+            byId.get("cn-820000"),
+            (grouped.get("county") || []).filter((p) => p.parent === "海南省"),
+          )
+          .filter(Boolean);
+      }
     }
     function fit() {
       motion = null;
-      const island = state.scope === "taiwan",
-        china = state.scope === "china";
-      cx = island ? 300.7 : china ? 284 : 180;
-      cy = island ? 66.3 : china ? 55 : 73;
-      baseScale = island
-        ? Math.min(w / 6.7, h / 5.8)
-        : china
-          ? Math.min(w / 69, h / 46)
-          : Math.min(w / 362, h / 150);
+      const china = state.scope === "china";
+      cx = china ? 284 : 180;
+      cy = china ? 55 : 73;
+      baseScale = china ? Math.min(w / 69, h / 46) : Math.min(w / 362, h / 150);
       scale = baseScale;
-      if (!stats && !island && !china && h > w * 1.15) {
+      if (!stats && !china && h > w * 1.15) {
         cx = 282;
         cy = 62;
         scale = Math.max(baseScale, Math.min(w / 91, h / 102));
@@ -456,12 +443,7 @@
     }
     function limit() {
       const china = state.scope === "china";
-      const ext =
-        state.scope === "taiwan"
-          ? [297.5, 62.5, 303, 68.9]
-          : china
-            ? [248, 32, 319, 75]
-            : [0, 0, 360, 180];
+      const ext = china ? [248, 32, 319, 75] : [0, 0, 360, 180];
       const marginX = (w / scale) * 0.33,
         marginY = (h / scale) * 0.33;
       cx = clamp(
@@ -469,7 +451,7 @@
         Math.min((ext[0] + ext[2]) / 2, ext[0] + marginX),
         Math.max((ext[0] + ext[2]) / 2, ext[2] - marginX),
       );
-      const centerY = state.scope === "taiwan" ? 66.3 : china ? 55 : 73;
+      const centerY = china ? 55 : 73;
       cy = clamp(
         cy,
         Math.min(centerY, ext[1] + marginY),
@@ -609,10 +591,10 @@
       return chunk?.get(e.key) || e.path;
     }
     function loadVisible() {
-      if (loadTimer || motion || pointers.size || !requested.size) return;
+      if (loadTimer || !requested.size) return;
       loadTimer = setTimeout(() => {
         loadTimer = 0;
-        if (disposed || motion || pointers.size) return;
+        if (disposed) return;
         for (const file of requested) {
           if (shared.pending.size >= 2) break;
           if (!shared.files.has(file)) shared.load(file);
@@ -627,9 +609,11 @@
       c.globalCompositeOperation = "source-atop";
       // The higher resolution China raster is an exact crop of the same source.
       const chinaBox = [252, 35, 316, 75];
-      if (visible(chinaBox) && (state.scope === "china" || scale > 16))
-        shared.loadChina();
-      const china = visible(chinaBox) ? shared.chinaTerrain : null;
+      if (visible(chinaBox) && state.scope === "china") shared.loadChina();
+      const china =
+        state.scope === "china" && visible(chinaBox)
+          ? shared.chinaTerrain
+          : null;
       c.imageSmoothingEnabled = true;
       c.globalAlpha = clamp(
         0.9 - Math.max(0, Math.log2(scale / 12)) * 0.075,
@@ -715,11 +699,7 @@
       c.lineWidth = 0.7 / scale;
       const shapes = [];
       countryAreas = [];
-      for (const e of state.scope === "taiwan"
-        ? taiwanBase
-        : state.scope === "china"
-          ? chinaBase
-          : base) {
+      for (const e of state.scope === "china" ? chinaBase : base) {
         if (!shapeVisible(e)) continue;
         const path = pathFor(e);
         shapes.push(path);
@@ -732,6 +712,7 @@
       for (const path of shapes) c.stroke(path);
       const isArea =
         state.layer === "region" ||
+        state.layer === "county" ||
         state.layer === "prefecture" ||
         state.layer === "records" ||
         state.layer === "country";
@@ -908,7 +889,10 @@
       for (const p of filtered) {
         const saved = statusOf(state.records, p.id),
           selected = p.id === state.selected;
-        const isArea = state.layer === "region" || state.layer === "prefecture";
+        const isArea =
+          state.layer === "region" ||
+          state.layer === "prefecture" ||
+          state.layer === "county";
         const min =
           saved || selected
             ? 0
@@ -1266,7 +1250,7 @@
         oldY = cy;
       w = root.clientWidth;
       h = root.clientHeight;
-      px = Math.min(2, window.devicePixelRatio || 1);
+      px = Math.min(3, window.devicePixelRatio || 1, Math.sqrt(12000000 / (w * h)));
       canvas.width = Math.ceil(w * px);
       canvas.height = Math.ceil(h * px);
       fit();

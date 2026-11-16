@@ -1052,3 +1052,18 @@ body[data-view="map"] #loading:not([hidden]) {
     transform: none;
   }
 }
+
+#transit {
+  background: #fffaf0;
+  color: #3c554b;
+  border: 1px solid #b8c4b8;
+  border-radius: 20px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+}
+#transit[aria-pressed="true"] {
+  background: #375e56;
+  color: white;
+}

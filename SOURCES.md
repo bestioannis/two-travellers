@@ -42,3 +42,5 @@
 应用按当前视野从 [OpenFreeMap](https://openfreemap.org/) 加载 [OpenMapTiles](https://openmaptiles.org/) 格式的 [OpenStreetMap](https://www.openstreetmap.org/copyright) 矢量图块，用于街道、建筑、公园、水体与道路名称。放大超过源图块分辨率后继续绘制同一批矢量要素。服务请求包含图块坐标。个人手记、日期和去过或想去的标记保存在原有旅行册中。
 
 国家及地区目录将 Natural Earth 国界按地区编码合并，保留同一目的地下已有地点记录的索引。台湾图层含 22 个县市和 64 个主要景点。县市边界来自[国土测绘中心行政区界线](https://data.gov.tw/dataset/7442)，参照 2025 年县市边界。景点名称、坐标与部分介绍来自[交通部观光署观光资讯资料库](https://data.gov.tw/dataset/7777)。县市与景点资料按[政府资料开放授权条款第 1 版](https://data.gov.tw/license)使用，已简化边界、转换文字并整理旅行提示。
+
+海南省直辖县级行政区、香港十八区和澳门八个区域的多边形来自[阿里云 DataV 行政区划边界](https://datav.aliyun.com/portal/school/atlas/area_selector)。公共交通模式使用 OpenStreetMap 的轨道和车站数据，按交通方式配色，各地覆盖程度随源数据而异。

@@ -1,4 +1,4 @@
-const version="ae0bc49000fdd2";
+const version="25bd28d0d89a49";
 const files=["./SOURCES.md", "./app.js", "./assets/apple-touch-icon.png", "./assets/icon-192.png", "./assets/icon-512.png", "./assets/kyoto.jpg", "./assets/paris.jpg", "./assets/singapore.jpg", "./atlas.json", "./config.js", "./detail/index.json", "./extra.json", "./index.html", "./manifest.webmanifest", "./map.css", "./map.js", "./physical/china-terrain.jpg", "./physical/terrain.jpg", "./physical/water.json", "./store.js", "./street.js", "./style.css", "./world.json", "./vendor/street/pbf.js", "./vendor/street/point.js", "./vendor/street/vector.js"];
 
 const prefix='two-travellers:'+self.registration.scope+':';
