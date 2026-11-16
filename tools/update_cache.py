@@ -2,7 +2,7 @@ from pathlib import Path
 from hashlib import sha256
 import json
 d=Path(__file__).resolve().parents[1]
-names = ["index.html", "app.js", "street.js", "map.js", "store.js", "config.js", "map.css", "style.css", "atlas.json", "extra.json", "world.json", "manifest.webmanifest", "SOURCES.md", "detail/index.json"]
+names = ["index.html", "app.js", "street.js", "metro.js", "metro-index.json", "map.js", "store.js", "config.js", "map.css", "style.css", "atlas.json", "extra.json", "world.json", "manifest.webmanifest", "SOURCES.md", "detail/index.json"]
 files = sorted([d / name for name in names] + [p for p in (d / "assets").iterdir() if p.suffix in {".png", ".jpg"}] + [p for p in (d / "physical").iterdir() if p.suffix in {".json", ".jpg", ".webp"}])
 files += sorted((d / "vendor/street").glob("*.js"))
 h=sha256()
