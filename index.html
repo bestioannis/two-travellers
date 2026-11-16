@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#f7f6ef" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="description" content="两个人的旅行地图、心愿清单和足迹手记" />
+    <title>双人旅图 · Two Travellers</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="assets/icon-192.png" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="map.css" />
+  </head>
+  <body>
+    <header>
+      <div class="header-inner">
+        <a class="brand" href="#map"
+          ><span class="brand-icon" data-i="bag"></span
+          ><span>双人旅图<small>TWO TRAVELLERS</small></span></a
+        >
+        <nav aria-label="主导航">
+          <a href="#map" data-page="map"><i data-i="map"></i>旅行地图</a
+          ><a href="#journal" data-page="journal"
+            ><i data-i="book"></i>足迹手记</a
+          ><a href="#stats" data-page="stats"><i data-i="chart"></i>旅行统计</a>
+        </nav>
+        <button id="account" class="account">
+          <i data-i="users"></i><span>双人空间</span>
+        </button>
+      </div>
+    </header>
+    <main>
+      <div class="title-line">
+        <div>
+          <div class="kicker">
+            <span></span><b id="kicker">OUR TRAVEL ATLAS</b>
+          </div>
+          <h1 id="page-title">我们的旅行地图<span>.</span></h1>
+          <p id="subtitle">一起去过的地方，和下一次想抵达的远方。</p>
+        </div>
+        <div class="search-wrap">
+          <i data-i="search"></i
+          ><input
+            id="search"
+            type="search"
+            autocomplete="off"
+            aria-label="搜索地点"
+            placeholder="搜索城市、地区或景点"
+          />
+          <div id="results" hidden></div>
+        </div>
+      </div>
+      <section id="map-page">
+        <div class="workspace">
+          <article class="map-card">
+            <div class="map-head">
+              <div class="scope">
+                <button data-scope="world">世界地图</button
+                ><button data-scope="china">中国地图</button>
+              </div>
+              <select id="layer" aria-label="地图标记层级"></select>
+            </div>
+            <div class="canvas-frame">
+              <div id="atlas" aria-label="可交互旅行地图"></div>
+              <div class="map-zoom">
+                <button id="plus" aria-label="放大">＋</button
+                ><button id="minus" aria-label="缩小">−</button
+                ><button id="reset" aria-label="重置视图">
+                  <i data-i="fit"></i>
+                </button>
+              </div>
+            </div>
+            <div class="legend">
+              <span><em class="dot visited"></em>去过</span
+              ><span><em class="dot wish"></em>想去</span
+              ><small>点击地点查看旅行资料</small>
+            </div>
+          </article>
+          <aside>
+            <div class="passport">
+              <div class="pass-top">
+                <i data-i="globe"></i><small>TRAVEL PASSPORT</small>
+              </div>
+              <h2>双人旅行护照</h2>
+              <div class="pass-bottom">
+                <div>
+                  <strong id="pass-v">0</strong><small>去过的地点</small>
+                </div>
+                <div>
+                  <strong id="pass-w">0</strong><small>想去的地点</small>
+                </div>
+                <button
+                  aria-label="查看旅行统计"
+                  onclick="location.hash='stats'"
+                >
+                  ↗
+                </button>
+              </div>
+            </div>
+            <section class="picks">
+              <h2>目的地灵感 <i data-i="compass"></i></h2>
+              <div id="inspiration"></div>
+            </section>
+          </aside>
+        </div>
+      </section>
+      <section id="journal-page" hidden>
+        <div class="filters">
+          <button data-filter="visited">去过的地方</button
+          ><button data-filter="wish">旅行心愿单</button>
+        </div>
+        <div id="journal"></div>
+      </section>
+      <section id="stats-page" hidden>
+        <div id="stats"></div>
+        <article class="map-card stats-map-card">
+          <div class="map-head">
+            <h2>足迹地图</h2>
+            <div class="scope">
+              <button data-stat-scope="world">世界</button
+              ><button data-stat-scope="china">中国</button>
+            </div>
+          </div>
+          <div class="canvas-frame">
+            <div id="stats-atlas" aria-label="旅行记录分布地图"></div>
+            <div class="map-zoom">
+              <button id="stats-plus" aria-label="放大足迹地图">＋</button
+              ><button id="stats-minus" aria-label="缩小足迹地图">−</button
+              ><button id="stats-reset" aria-label="足迹地图全览">⌖</button>
+            </div>
+          </div>
+          <div class="legend">
+            <span><em class="dot visited"></em>去过</span
+            ><span><em class="dot wish"></em>想去</span
+            ><select id="stat-filter" aria-label="筛选地图上的记录">
+              <option value="all">全部记录</option>
+              <option value="visited">只看去过</option>
+              <option value="wish">只看想去</option>
+            </select>
+          </div>
+          <p id="stat-empty" class="stats-hint"></p>
+        </article>
+        <div id="stats-breakdown"></div>
+      </section>
+      <div id="loading" role="status">正在展开地图…</div>
+    </main>
+    <dialog id="sheet">
+      <div class="dialog-bar">
+        <span id="dialog-label"></span
+        ><button id="close" aria-label="关闭">×</button>
+      </div>
+      <div id="detail"></div>
+    </dialog>
+    <div id="toast" role="status"></div>
+    <script src="config.js"></script>
+    <script src="store.js"></script>
+    <script src="map.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
