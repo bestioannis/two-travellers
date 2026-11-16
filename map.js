@@ -90,7 +90,22 @@
   const rank = (p) => notableRank.get(p.name?.replace(/市$/, "")) ?? 1000;
   const atlasCache = new WeakMap();
   const chinese = (p) => ["中国", "China", "CN"].includes(p.country);
-  const maxScale = 3072;
+  const maxScale = (2 ** 20 * 512) / 360;
+  const taiwan = (p) =>
+    p.taiwan ||
+    (p.type === "city" &&
+      chinese(p) &&
+      p.lon >= 120 &&
+      p.lon < 122.2 &&
+      p.lat > 21.8 &&
+      p.lat < 25.5);
+  let streetLibrary;
+  function streets() {
+    return (streetLibrary ||= import("./street.js").catch((error) => {
+      streetLibrary = null;
+      throw error;
+    }));
+  }
   const font =
     '600 11px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
   const countryFont =
@@ -312,9 +327,65 @@
       .filter(chinese)
       .map((p) => geom.get(p.id))
       .filter(Boolean);
+    const taiwanBase = (grouped.get("prefecture") || [])
+      .filter(taiwan)
+      .map((p) => geom.get(p.id))
+      .filter(Boolean);
+    const countryForShape = new Map();
+    for (const p of grouped.get("country") || [])
+      for (const id of p.worldIds || []) countryForShape.set(id, p);
+    const credit = document.createElement("div");
+    credit.className = "street-credit";
+    credit.hidden = true;
+    credit.innerHTML =
+      '<span aria-live="polite"></span> <a href="https://openfreemap.org/" target="_blank" rel="noopener">OpenFreeMap</a> · <a href="https://openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>';
+    root.append(credit);
+    let streetEngine,
+      streetPending = false,
+      unsubStreet,
+      streetRetry = 0,
+      countryAreas = [];
+    function renderStreets() {
+      const enabled = scale >= (512 * 64) / 360;
+      credit.hidden = !enabled;
+      if (!enabled) return;
+      if (!streetEngine && !streetPending && Date.now() > streetRetry) {
+        streetPending = true;
+        streets()
+          .then((module) => {
+            if (disposed) return;
+            streetEngine = module;
+            unsubStreet = module.subscribe(paint);
+            paint();
+          })
+          .catch(() => {
+            streetRetry = Date.now() + 30000;
+            paint();
+          })
+          .finally(() => (streetPending = false));
+      }
+      const status =
+        streetEngine?.paintStreets(c, {
+          clip,
+          scale,
+          px,
+          w,
+          h,
+          scope: state.scope,
+          allowRequests: !motion && !pointers.size,
+        }) || (streetRetry > Date.now() ? "offline" : "loading");
+      const notice =
+        status === "loading"
+          ? "街道加载中"
+          : status === "offline"
+            ? "街道暂不可用 · 离线底图"
+            : "";
+      if (credit.firstChild.textContent !== notice)
+        credit.firstChild.textContent = notice;
+    }
     let state = {
       scope: "world",
-      layer: stats ? "records" : "city",
+      layer: stats ? "records" : "country",
       records: {},
       selected: null,
     };
@@ -357,20 +428,40 @@
                   (b.type === "region" ? -1 : 0),
               )
           : grouped.get(state.layer) || [];
-      filtered = state.scope === "china" ? list.filter(chinese) : list;
+      filtered =
+        state.scope === "taiwan"
+          ? list.filter(taiwan)
+          : state.scope === "china"
+            ? list.filter(chinese)
+            : list;
     }
     function fit() {
       motion = null;
-      const china = state.scope === "china";
-      cx = china ? 284 : 180;
-      cy = china ? 55 : 73;
-      baseScale = china ? Math.min(w / 69, h / 42) : Math.min(w / 362, h / 151);
+      const island = state.scope === "taiwan",
+        china = state.scope === "china";
+      cx = island ? 300.7 : china ? 284 : 180;
+      cy = island ? 66.3 : china ? 55 : 73;
+      baseScale = island
+        ? Math.min(w / 6.7, h / 5.8)
+        : china
+          ? Math.min(w / 69, h / 46)
+          : Math.min(w / 362, h / 150);
       scale = baseScale;
+      if (!stats && !island && !china && h > w * 1.15) {
+        cx = 282;
+        cy = 62;
+        scale = Math.max(baseScale, Math.min(w / 91, h / 102));
+      }
       paint();
     }
     function limit() {
       const china = state.scope === "china";
-      const ext = china ? [248, 32, 319, 75] : [0, 0, 360, 180];
+      const ext =
+        state.scope === "taiwan"
+          ? [297.5, 62.5, 303, 68.9]
+          : china
+            ? [248, 32, 319, 75]
+            : [0, 0, 360, 180];
       const marginX = (w / scale) * 0.33,
         marginY = (h / scale) * 0.33;
       cx = clamp(
@@ -378,7 +469,7 @@
         Math.min((ext[0] + ext[2]) / 2, ext[0] + marginX),
         Math.max((ext[0] + ext[2]) / 2, ext[2] - marginX),
       );
-      const centerY = china ? 55 : 73;
+      const centerY = state.scope === "taiwan" ? 66.3 : china ? 55 : 73;
       cy = clamp(
         cy,
         Math.min(centerY, ext[1] + marginY),
@@ -623,18 +714,27 @@
       c.strokeStyle = palette.border;
       c.lineWidth = 0.7 / scale;
       const shapes = [];
-      for (const e of state.scope === "china" ? chinaBase : base) {
+      countryAreas = [];
+      for (const e of state.scope === "taiwan"
+        ? taiwanBase
+        : state.scope === "china"
+          ? chinaBase
+          : base) {
         if (!shapeVisible(e)) continue;
         const path = pathFor(e);
         shapes.push(path);
+        if (state.scope === "world" && countryForShape.has(e.key))
+          countryAreas.push({ p: countryForShape.get(e.key), e, path });
         c.fill(path, "evenodd");
       }
       if (shapes.length) physical();
+      renderStreets();
       for (const path of shapes) c.stroke(path);
       const isArea =
         state.layer === "region" ||
         state.layer === "prefecture" ||
-        state.layer === "records";
+        state.layer === "records" ||
+        state.layer === "country";
       areas = [];
       if (isArea) {
         for (const p of filtered) {
@@ -645,6 +745,7 @@
           const stat = statusOf(state.records, p.id),
             selected = state.selected === p.id;
           if (stat || selected) {
+            c.globalAlpha = scale > 1024 ? 0.28 : 1;
             c.fillStyle =
               stat === "visited"
                 ? "rgba(86,159,122,.55)"
@@ -652,6 +753,7 @@
                   ? "rgba(223,140,105,.54)"
                   : "rgba(211,174,108,.55)";
             c.fill(path, "evenodd");
+            c.globalAlpha = 1;
           }
           c.strokeStyle = selected
             ? "#624830"
@@ -779,7 +881,7 @@
           at: 0,
         });
       }
-      if (state.scope === "world") {
+      if (state.scope === "world" && state.layer !== "country") {
         const names =
           typeof Intl.DisplayNames === "function"
             ? new Intl.DisplayNames(["zh-Hans"], {
@@ -817,9 +919,27 @@
               : rank(p) < 1000
                 ? 0.65
                 : 3.5;
+        const flag =
+          p.type === "country" && /^[A-Z]{2}$/.test(p.countryCode)
+            ? String.fromCodePoint(
+                ...[...p.countryCode].map((ch) => 127397 + ch.charCodeAt(0)),
+              ) + " "
+            : "";
         add(p, {
-          min,
-          priority: selected ? 0 : saved ? 1 : rank(p) < 1000 ? 2.5 : 3,
+          label: flag + p.name,
+          min:
+            p.type === "country" && !saved && !selected
+              ? 0.7 * 1.72 ** (p.labelRank - 1)
+              : min,
+          priority: selected
+            ? 0
+            : saved
+              ? 1
+              : p.type === "country"
+                ? 2 + p.labelRank / 20
+                : rank(p) < 1000
+                  ? 2.5
+                  : 3,
         });
       }
       nodes.sort(
@@ -836,7 +956,7 @@
       const shown = placement(scale),
         visibleIds = new Set();
       points = [];
-      function point(p, label, labelRadius = 0) {
+      function point(p, label, labelRadius = 0, text = p.name) {
         const { x, y } = screen(+p.lon + 180, 90 - +p.lat);
         if (x < -130 || x > w + 130 || y < -40 || y > h + 40) return;
         const stat = statusOf(state.records, p.id),
@@ -847,7 +967,17 @@
           scale < 8 &&
           w > 440 &&
           Object.hasOwn(illustrations, p.name);
-        points.push({ p, x, y, sel, stat, label, labelRadius, illustrated });
+        points.push({
+          p,
+          x,
+          y,
+          sel,
+          stat,
+          label,
+          labelRadius,
+          illustrated,
+          text,
+        });
       }
       for (const n of shown) {
         const a = screen(n.wx, n.wy);
@@ -867,7 +997,7 @@
           c.restore();
         } else {
           visibleIds.add(n.p.id);
-          point(n.p, true, n.rx);
+          point(n.p, true, n.rx, n.label);
         }
       }
       // A recorded marker remains selectable even if its label cannot yet fit.
@@ -882,7 +1012,7 @@
         (a, b) =>
           Number(b.sel) - Number(a.sel) || Number(!!b.stat) - Number(!!a.stat),
       );
-      for (const { p, x, y, sel, stat, label, illustrated } of [
+      for (const { p, x, y, sel, stat, label, illustrated, text } of [
         ...points,
       ].reverse()) {
         const color =
@@ -924,7 +1054,7 @@
           c.lineWidth = 1;
           c.stroke();
         }
-        if (label) roundedLabel(p.name, x, y + 16, color, sel || stat);
+        if (label) roundedLabel(text, x, y + 16, color, sel || stat);
       }
     }
     function compass() {
@@ -1006,7 +1136,10 @@
       const a = worldCoord(x, y);
       c.save();
       c.setTransform(1, 0, 0, 1, 0, 0);
-      for (const { p, e, path } of [...areas].reverse()) {
+      for (const { p, e, path } of [
+        ...(stats ? [] : countryAreas),
+        ...areas,
+      ].reverse()) {
         if (
           path === e.path &&
           e.box &&
@@ -1158,7 +1291,7 @@
         if (change) fit();
         else paint();
       },
-      focus(id) {
+      focus(id, options = {}) {
         const p = byId.get(id);
         if (!p) return;
         motion = null;
@@ -1166,7 +1299,8 @@
         cx = Number(p.lon) + 180;
         cy = 90 - Number(p.lat);
         const b = geom.get(id)?.box;
-        if (b)
+        if (options.street) scale = (512 * 2 ** 16) / 360;
+        else if (b)
           scale = clamp(
             Math.min(
               w / (Math.max(0.2, b[2] - b[0]) * 1.6),
@@ -1183,6 +1317,8 @@
       zoom,
       destroy() {
         disposed = true;
+        unsubStreet?.();
+        credit.remove();
         shared.views.delete(requested);
         shared.listeners.delete(paint);
         clearTimeout(loadTimer);

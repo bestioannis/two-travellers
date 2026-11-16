@@ -26,3 +26,23 @@
   outline: 3px solid #bd573a;
   outline-offset: -5px;
 }
+.street-credit {
+  position: absolute;
+  z-index: 2;
+  bottom: 0;
+  right: 0;
+  max-width: 100%;
+  padding: 2px 5px;
+  background: #faf9efeb;
+  color: #324b44;
+  font:
+    10px/1.4 system-ui,
+    sans-serif;
+  text-align: right;
+}
+.street-credit a {
+  color: inherit;
+}
+.street-credit span {
+  font-weight: 600;
+}

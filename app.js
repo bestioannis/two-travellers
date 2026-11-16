@@ -20,6 +20,7 @@ document.querySelectorAll("[data-i]").forEach((el) => {
     "</svg>";
 });
 const types = {
+  country: "国家及地区",
   region: "省 / 州",
   city: "旅行城市",
   prefecture: "地级行政区",
@@ -65,7 +66,7 @@ let places = [],
   worldShapes,
   statsScope = "world",
   scope = "world",
-  layer = "city",
+  layer = "country",
   selected = "",
   filter = "visited",
   page = "map";
@@ -117,8 +118,10 @@ $("sheet").addEventListener("click", (e) => {
 function layers() {
   let keys =
     scope === "world"
-      ? ["city", "region"]
-      : ["prefecture", "region", "sight", "city"];
+      ? ["country", "city", "region"]
+      : scope === "taiwan"
+        ? ["prefecture", "sight", "city"]
+        : ["prefecture", "region", "sight", "city"];
   $("layer").innerHTML = keys
     .map((k) => '<option value="' + k + '">' + types[k] + "</option>")
     .join("");
@@ -134,7 +137,9 @@ document.querySelectorAll("[data-scope]").forEach(
   (b) =>
     (b.onclick = () => {
       scope = b.dataset.scope;
-      layer = scope === "world" ? "city" : "prefecture";
+      $("search").value = "";
+      $("results").hidden = true;
+      layer = scope === "world" ? "country" : "prefecture";
       selected = "";
       layers();
       mapUpdate();
@@ -152,6 +157,7 @@ $("reset").onclick = () => controller?.reset();
 function navigate() {
   page = location.hash.slice(1);
   if (!Object.hasOwn(titles, page)) page = "map";
+  document.body.dataset.view = page;
   const [k, h, p] = titles[page];
   $("kicker").textContent = k;
   $("page-title").innerHTML = h + "<span>.</span>";
@@ -241,8 +247,7 @@ function refresh() {
     items = Object.entries(records).filter(([id]) => byId.has(id)),
     visited = items.filter(([, r]) => r.status === "visited"),
     wish = items.filter(([, r]) => r.status === "wish");
-  $("pass-v").textContent = visited.length;
-  $("pass-w").textContent = wish.length;
+
   if (page === "map") mapUpdate();
   if (page === "journal") {
     document
@@ -268,7 +273,9 @@ function refresh() {
       types[k],
       visited.filter(([id]) => byId.get(id).type === k).length,
     ]);
-    const countries = new Set(visited.map(([id]) => byId.get(id).country));
+    const countries = new Set(
+      visited.map(([id]) => byId.get(id).countryCode || byId.get(id).country),
+    );
     $("stats").innerHTML =
       '<div class="stats-grid">' +
       [
@@ -320,38 +327,6 @@ document.querySelectorAll("[data-filter]").forEach(
       refresh();
     }),
 );
-const picks = [
-  ["kyoto", "京都", "日本 · 古都寺社"],
-  ["paris", "巴黎", "法国 · 塞纳河畔"],
-  ["singapore", "新加坡", "新加坡 · 花园城市"],
-];
-function inspiration() {
-  const html = picks.map(([img, name, sub]) => {
-    const p =
-      places.find(
-        (x) =>
-          x.type === "city" &&
-          (x.name === name ||
-            String(x.alias)
-              .toLowerCase()
-              .split(/[,|;]/)
-              .some((a) => a.trim() === img)),
-      ) || places.find((x) => x.type === "city" && x.name.includes(name));
-    return p
-      ? '<button class="pick" data-place="' +
-          esc(p.id) +
-          '"><img src="assets/' +
-          img +
-          '.jpg" alt=""><span><strong>' +
-          name +
-          "</strong><small>" +
-          esc(countryLabel(p)) +
-          esc(sub.slice(sub.indexOf(" · "))) +
-          "</small></span><b>↗</b></button>"
-      : "";
-  });
-  $("inspiration").innerHTML = html.join("");
-}
 let markMode = "browse";
 document.querySelectorAll("[data-mark]").forEach(
   (b) =>
@@ -400,6 +375,31 @@ function chooseOnMap(id) {
   selected = id;
   markPlace(id, markMode).catch(handle);
 }
+function countryJournal(p) {
+  if (p.type !== "country") return "";
+  const records = Object.entries(S.records()).filter(([id]) => {
+    const child = byId.get(id);
+    return (
+      child && child.type !== "country" && child.countryCode === p.countryCode
+    );
+  });
+  const rows = records.sort((a, b) => b[1].date.localeCompare(a[1].date));
+  const visited = rows.filter(([, r]) => r.status === "visited").length;
+  return (
+    '<section class="country-journal"><h3>在' +
+    esc(p.name) +
+    "的旅行记录</h3>" +
+    (rows.length
+      ? "<p>" +
+        visited +
+        " 个去过 · " +
+        (rows.length - visited) +
+        " 个想去</p>" +
+        rows.map(([id, r]) => entry(byId.get(id), r)).join("")
+      : "<p>在这里标过的城市、地区和景点会汇集在这张卡片。</p>") +
+    "</section>"
+  );
+}
 function showPlace(id, fly = false) {
   const p = byId.get(id);
   if (!p) return;
@@ -407,8 +407,9 @@ function showPlace(id, fly = false) {
   $("results").hidden = true;
   if (fly) {
     location.hash = "map";
-    scope =
-      p.type === "prefecture" || (p.type === "sight" && p.country === "中国")
+    scope = p.taiwan
+      ? "taiwan"
+      : p.type === "prefecture" || (p.type === "sight" && p.country === "中国")
         ? "china"
         : "world";
     layer = p.type;
@@ -431,15 +432,6 @@ function showPlace(id, fly = false) {
         );
     } catch {}
   }
-  link(
-    "Apple 地图",
-    "https://maps.apple.com/?ll=" +
-      p.lat +
-      "," +
-      p.lon +
-      "&q=" +
-      encodeURIComponent(p.name),
-  );
   link(
     "地理与历史",
     p.wiki?.startsWith("https://")
@@ -476,6 +468,8 @@ function showPlace(id, fly = false) {
       ? '<div class="actions">' + btn("save", "保存手记", "primary") + "</div>"
       : "<p>填写后，点上方「去过」或「想去」保存。</p>") +
     "</details>" +
+    countryJournal(p) +
+    (p.type === "country" ? "" : btn("street-view", "在地图中查看街道 ↗")) +
     "<p>" +
     esc(p.overview || p.name + "位于" + p.country + "。") +
     "</p>" +
@@ -488,6 +482,16 @@ function showPlace(id, fly = false) {
       ? '<div class="actions">' + btn("remove", "移除标记") + "</div>"
       : "");
   $("note").value = r.note;
+  if ($("street-view"))
+    $("street-view").onclick = () => {
+      $("sheet").close();
+      location.hash = "map";
+      scope = p.taiwan ? "taiwan" : p.country === "中国" ? "china" : "world";
+      layer = p.type;
+      layers();
+      navigate();
+      controller?.focus(id, { street: true });
+    };
   async function commit(next) {
     const record = { date: $("trip-date").value, note: $("note").value };
     try {
@@ -516,14 +520,10 @@ function showPlace(id, fly = false) {
 document.body.addEventListener("click", (e) => {
   const b = e.target.closest("[data-place]");
   if (b) {
-    if (
-      page === "map" &&
-      markMode !== "browse" &&
-      b.closest("#results,#inspiration")
-    ) {
+    if (page === "map" && markMode !== "browse" && b.closest("#results")) {
       $("results").hidden = true;
       chooseOnMap(b.dataset.place);
-    } else showPlace(b.dataset.place, !!b.closest("#results,#inspiration"));
+    } else showPlace(b.dataset.place, !!b.closest("#results"));
   }
   if (!e.target.closest(".search-wrap")) $("results").hidden = true;
 });
@@ -538,6 +538,7 @@ function search() {
     .sort(
       (a, b) =>
         (b.name.toLowerCase() === q) - (a.name.toLowerCase() === q) ||
+        (b.type === "country") - (a.type === "country") ||
         (b.type === "city") - (a.type === "city"),
     )
     .slice(0, 35);
@@ -593,7 +594,7 @@ function account() {
       : a.configured
         ? '<form id="loginForm"><label for="email">邮箱</label><input id="email" required type="email" autocomplete="username"><label for="password">密码</label><input id="password" required type="password" autocomplete="current-password"><div class="actions"><button class="action primary">登录并同步</button></div></form>'
         : "<p>当前记录保存在这台设备。连接项目的 Supabase 后，两个人可用各自的账号登录，共享标记和手记。</p>") +
-    '<h3>个人数据存在哪里？</h3><p>未登录时，标记、日期和手记保存在当前浏览器或主屏幕 App 的网站存储（localStorage）中。它们不会提交到 GitHub，也不会自动生成「文件」中的文档。清除网站数据可能删除记录，想留一份独立文件可点「导出备份」。开通同步并登录后，记录也会保存在你们的 Supabase 数据库，仅两位获准成员可通过应用访问。GitHub 公开托管网页代码和地图资料。导出的备份由你保管。</p><h3>备份与恢复</h3><p>导出 JSON 可留存整本护照。导入会合并地点，相同地点使用备份中的记录。</p><div class="actions">' +
+    '<h3>个人数据存在哪里？</h3><p>未登录时，标记、日期和手记保存在当前浏览器或主屏幕 App 的网站存储（localStorage）中。它们不会提交到 GitHub，也不会自动生成「文件」中的文档。清除网站数据可能删除记录，想留一份独立文件可点「导出备份」。街道底图按当前视野从 OpenFreeMap 加载公开图块。请求中只有地图区域，不包含手记、日期或标记状态。开通同步并登录后，记录也会保存在你们的 Supabase 数据库，仅两位获准成员可通过应用访问。GitHub 公开托管网页代码和地图资料。导出的备份由你保管。</p><h3>备份与恢复</h3><p>导出 JSON 可留存整本护照。导入会合并地点，相同地点使用备份中的记录。</p><div class="actions">' +
     btn("export", "导出备份") +
     btn("import", "导入备份") +
     '</div><input type="file" accept=".json,application/json" id="file" hidden><p id="account-msg" role="status"></p><h3>装到 iPhone</h3><p>在 Safari 打开网站，点分享菜单，选择「添加到主屏幕」。</p><p><a href="SOURCES.md" target="_blank" rel="noopener">地图与目的地资料来源 ↗</a></p>';
@@ -637,18 +638,18 @@ async function boot() {
   layers();
   navigate();
   try {
-    const [atlas, world] = await Promise.all(
-      ["atlas.json", "world.json"].map(async (url) => {
+    const [atlas, world, extra] = await Promise.all(
+      ["atlas.json", "world.json", "extra.json"].map(async (url) => {
         const r = await fetch(url);
         if (!r.ok) throw Error(url);
         return r.json();
       }),
     );
-    places = atlas;
+    places = [...new Map([...atlas, ...extra].map((p) => [p.id, p])).values()];
     worldShapes = world;
     for (const p of places) {
       byId.set(p.id, p);
-      p.lookup = [p.name, p.alias, p.country]
+      p.lookup = [p.name, p.alias, p.country, p.parent, p.region]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
@@ -658,7 +659,7 @@ async function boot() {
       world,
       onSelect: chooseOnMap,
     });
-    inspiration();
+
     $("loading").hidden = true;
     refresh();
     if ("serviceWorker" in navigator)

@@ -18,7 +18,7 @@
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="map.css" />
   </head>
-  <body>
+  <body data-view="map">
     <header>
       <div class="header-inner">
         <a class="brand" href="#map"
@@ -52,7 +52,7 @@
             type="search"
             autocomplete="off"
             aria-label="搜索地点"
-            placeholder="搜索城市、地区或景点"
+            placeholder="搜索国家、城市或景点"
           />
           <div id="results" hidden></div>
         </div>
@@ -62,8 +62,9 @@
           <article class="map-card">
             <div class="map-head">
               <div class="scope">
-                <button data-scope="world">世界地图</button
-                ><button data-scope="china">中国地图</button>
+                <button data-scope="world">世界</button
+                ><button data-scope="china">中国</button
+                ><button data-scope="taiwan">台湾</button>
               </div>
               <select id="layer" aria-label="地图标记层级"></select>
             </div>
@@ -88,32 +89,6 @@
               <small id="mark-hint">点地点或地名查看</small>
             </div>
           </article>
-          <aside>
-            <div class="passport">
-              <div class="pass-top">
-                <i data-i="globe"></i><small>TRAVEL PASSPORT</small>
-              </div>
-              <h2>双人旅行护照</h2>
-              <div class="pass-bottom">
-                <div>
-                  <strong id="pass-v">0</strong><small>去过的地点</small>
-                </div>
-                <div>
-                  <strong id="pass-w">0</strong><small>想去的地点</small>
-                </div>
-                <button
-                  aria-label="查看旅行统计"
-                  onclick="location.hash='stats'"
-                >
-                  ↗
-                </button>
-              </div>
-            </div>
-            <section class="picks">
-              <h2>目的地灵感 <i data-i="compass"></i></h2>
-              <div id="inspiration"></div>
-            </section>
-          </aside>
         </div>
       </section>
       <section id="journal-page" hidden>

@@ -36,3 +36,9 @@
 水系来自 Natural Earth 1:10m 的[河流与湖心线](https://www.naturalearthdata.com/downloads/10m-physical-vectors/10m-rivers-lake-centerlines/)与[湖泊、水库](https://www.naturalearthdata.com/downloads/10m-physical-vectors/10m-lakes/) 5.0.0。保留 1,214 个河流或运河要素与 1,355 个湖泊、水库等水面要素，按原始制图等级供不同缩放级别选择。湖心线是用于连接河网的辅助线，地图在湖面内省略这些线条。两类底图均来自 [Natural Earth 公有领域资料](https://www.naturalearthdata.com/about/terms-of-use/)。
 
 中国视图另截取东经 72° 至 136°、北纬 15° 至 55° 的原分辨率地形（2,880 × 1,800 像素），覆盖上述范围内的大陆、台湾及附近岛屿。范围外使用世界全图。两幅影像取自同一份地形数据。
+
+## 街道与旅行记录图层
+
+应用按当前视野从 [OpenFreeMap](https://openfreemap.org/) 加载 [OpenMapTiles](https://openmaptiles.org/) 格式的 [OpenStreetMap](https://www.openstreetmap.org/copyright) 矢量图块，用于街道、建筑、公园、水体与道路名称。放大超过源图块分辨率后继续绘制同一批矢量要素。服务请求包含图块坐标。个人手记、日期和去过或想去的标记保存在原有旅行册中。
+
+国家及地区目录将 Natural Earth 国界按地区编码合并，保留同一目的地下已有地点记录的索引。台湾图层含 22 个县市和 64 个主要景点。县市边界来自[国土测绘中心行政区界线](https://data.gov.tw/dataset/7442)，参照 2025 年县市边界。景点名称、坐标与部分介绍来自[交通部观光署观光资讯资料库](https://data.gov.tw/dataset/7777)。县市与景点资料按[政府资料开放授权条款第 1 版](https://data.gov.tw/license)使用，已简化边界、转换文字并整理旅行提示。
