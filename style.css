@@ -1067,3 +1067,11 @@ body[data-view="map"] #loading:not([hidden]) {
   background: #375e56;
   color: white;
 }
+
+#railway {
+  font-size: 12px;
+}
+#railway[aria-pressed="true"] {
+  background: #375e56;
+  color: white;
+}

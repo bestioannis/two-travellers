@@ -65,14 +65,22 @@
                 <button data-scope="world">世界</button
                 ><button data-scope="china">中国</button>
               </div>
-              <button type="button" id="transit" aria-pressed="false">
-                公共交通
+              <button type="button" id="transit" aria-pressed="true">
+                地铁 / 轻轨
               </button>
               <select id="layer" aria-label="地图标记层级"></select>
             </div>
             <div class="canvas-frame">
               <div id="atlas" aria-label="可交互旅行地图"></div>
               <div class="map-zoom">
+                <button
+                  id="railway"
+                  type="button"
+                  aria-label="显示普通铁路"
+                  aria-pressed="false"
+                >
+                  铁路
+                </button>
                 <button id="plus" aria-label="放大">＋</button
                 ><button id="minus" aria-label="缩小">−</button
                 ><button id="reset" aria-label="重置视图">

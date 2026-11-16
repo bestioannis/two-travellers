@@ -1,3 +1,4 @@
+export { paintMetro } from "./metro.js";
 import { VectorTile } from "./vendor/street/vector.js";
 import Pbf from "./vendor/street/pbf.js";
 
@@ -77,11 +78,6 @@ const groups = {
   highway: { edge: "#c8a182", line: "#ecc99d", w: 5.5 },
   rail: { line: "#9a9e9a", w: 1.3, dash: true, min: 8 },
 };
-const transitStyles = {
-  subway: { line: "#8950aa", w: 4 },
-  lightRail: { line: "#198274", w: 3.5 },
-  rail: { line: "#4476b3", w: 3 },
-};
 const fade = (value) => {
   const t = clamp(value, 0, 1);
   return t * t * (3 - 2 * t);
@@ -152,6 +148,11 @@ function labelRule(layer, props) {
     if (["continent", "country", "state"].includes(props.class)) return;
     return [props.class === "city" ? 6 : props.class === "town" ? 9 : 12, 0];
   }
+  if (
+    layer === "transportation_name" &&
+    ["rail", "transit"].includes(props.class)
+  )
+    return;
   if (layer === "transportation_name")
     return [
       props.class === "motorway" || props.class === "trunk"
@@ -161,7 +162,8 @@ function labelRule(layer, props) {
           : 14,
       1,
     ];
-  if (layer === "poi" && props.class === "railway") return [11, -1];
+  if (layer === "poi" && props.class === "railway")
+    return props.subclass === "station" ? [13, -1] : undefined;
   if (layer === "poi") return [(props.rank ?? 4) < 4 ? 14.5 : 16, 3];
   return [12, 2];
 }
@@ -282,7 +284,18 @@ async function load(key, z, x, y) {
     notify();
   }
 }
-function paintTile(ctx, tile, atX, atY, scale, zoom, box, candidates, transit) {
+function paintTile(
+  ctx,
+  tile,
+  atX,
+  atY,
+  scale,
+  zoom,
+  box,
+  candidates,
+  transit,
+  railway,
+) {
   const k = (tile.width * scale) / extent,
     height = tile.height * scale;
   ctx.save();
@@ -297,13 +310,8 @@ function paintTile(ctx, tile, atX, atY, scale, zoom, box, candidates, transit) {
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   const baseAlpha = ctx.globalAlpha;
-  for (const name of [...Object.keys(groups), "lightRail", "subway"]) {
-    const transport = transitStyles[name];
-    const style = transport
-      ? transit
-        ? transport
-        : groups.rail
-      : groups[name];
+  for (const [name, style] of Object.entries(groups)) {
+    if (name === "rail" && !railway) continue;
     const p = tile.paths.get(name);
     if (!p || zoom < (style.min || 0)) continue;
     ctx.globalAlpha =
@@ -331,7 +339,8 @@ function paintTile(ctx, tile, atX, atY, scale, zoom, box, candidates, transit) {
   ctx.restore();
   for (const label of tile.labels) {
     const station = label.order === -1;
-    const min = station && !transit ? 15 : label.min;
+    if (station && !railway) continue;
+    const min = label.min;
     if (zoom < min || (transit && label.order === 3)) continue;
     const x = atX + label.x * k,
       y = atY + label.y * k;
@@ -400,7 +409,10 @@ let fadeFrame = 0;
 export const streetThreshold = 5;
 // The atlas provides an existing land silhouette for China/Taiwan. source-atop also
 // clips street names and buildings, including cross-border features inside an MVT buffer.
-export function paintStreets(ctx, { clip, scale, px, w, h, scope, transit }) {
+export function paintStreets(
+  ctx,
+  { clip, scale, px, w, h, scope, transit, railway },
+) {
   const zoom = Math.log2((scale * 360) / 512);
   if (zoom < streetThreshold) return "hidden";
   if (!template) {
@@ -454,7 +466,18 @@ export function paintStreets(ctx, { clip, scale, px, w, h, scope, transit }) {
       if (ctx.globalAlpha <= 0) return;
       const atX = (t.x * t.width - clip[0]) * scale;
       const atY = (90 - t.north - clip[1]) * scale;
-      paintTile(ctx, t, atX, atY, scale, zoom, box, candidates, transit);
+      paintTile(
+        ctx,
+        t,
+        atX,
+        atY,
+        scale,
+        zoom,
+        box,
+        candidates,
+        transit,
+        railway,
+      );
       loaded++;
     }
     let parent;

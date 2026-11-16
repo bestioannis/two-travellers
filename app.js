@@ -67,7 +67,8 @@ let places = [],
   worldShapes,
   statsScope = "world",
   scope = "world",
-  transit = false,
+  transit = true,
+  railway = false,
   layer = "country",
   selected = "",
   filter = "visited",
@@ -131,7 +132,14 @@ function layers() {
     .forEach((b) => b.classList.toggle("active", b.dataset.scope === scope));
 }
 function mapUpdate() {
-  controller?.update({ scope, layer, transit, records: S.records(), selected });
+  controller?.update({
+    scope,
+    layer,
+    transit,
+    railway,
+    records: S.records(),
+    selected,
+  });
 }
 document.querySelectorAll("[data-scope]").forEach(
   (b) =>
@@ -154,8 +162,12 @@ $("layer").onchange = (e) => {
 $("transit").onclick = () => {
   transit = !transit;
   $("transit").setAttribute("aria-pressed", String(transit));
-  if (transit)
-    notify("放大到城市查看线路和车站 · 紫色地铁 / 绿色轻轨 / 蓝色铁路");
+  if (transit) notify("地铁按线路颜色显示，放大可查看站名");
+  mapUpdate();
+};
+$("railway").onclick = () => {
+  railway = !railway;
+  $("railway").setAttribute("aria-pressed", String(railway));
   mapUpdate();
 };
 $("plus").onclick = () => controller?.zoom(1.55);
@@ -597,7 +609,7 @@ function account() {
       : a.configured
         ? '<form id="loginForm"><label for="email">邮箱</label><input id="email" required type="email" autocomplete="username"><label for="password">密码</label><input id="password" required type="password" autocomplete="current-password"><div class="actions"><button class="action primary">登录并同步</button></div></form>'
         : "<p>当前记录保存在这台设备。连接项目的 Supabase 后，两个人可用各自的账号登录，共享标记和手记。</p>") +
-    '<h3>个人数据存在哪里？</h3><p>未登录时，标记、日期和手记保存在当前浏览器或主屏幕 App 的网站存储（localStorage）中。它们不会提交到 GitHub，也不会自动生成「文件」中的文档。清除网站数据可能删除记录，想留一份独立文件可点「导出备份」。街道底图按当前视野从 OpenFreeMap 加载公开图块。请求中只有地图区域，不包含手记、日期或标记状态。开通同步并登录后，记录也会保存在你们的 Supabase 数据库，仅两位获准成员可通过应用访问。GitHub 公开托管网页代码和地图资料。导出的备份由你保管。</p><h3>备份与恢复</h3><p>导出 JSON 可留存整本护照。导入会合并地点，相同地点使用备份中的记录。</p><div class="actions">' +
+    '<h3>个人数据存在哪里？</h3><p>用 iPhone 的 Safari 打开时，标记、日期和手记存在这台手机的 Safari「网站数据」里。关闭网页后仍会保留。要看占用空间，可到「设置 → App → Safari → 高级 → 网站数据」搜索 bestioannis.github.io。显示的大小包含离线地图和网页缓存。它们不会提交到 GitHub，也不会自动生成「文件」中的文档。清除网站数据可能删除记录，想留一份独立文件可点「导出备份」。街道底图按当前视野从 OpenFreeMap 加载公开图块。请求中只有地图区域，不包含手记、日期或标记状态。开通同步并登录后，记录也会保存在你们的 Supabase 数据库，仅两位获准成员可通过应用访问。GitHub 公开托管网页代码和地图资料。导出的备份由你保管。</p><h3>备份与恢复</h3><p>导出 JSON 可留存整本护照。导入会合并地点，相同地点使用备份中的记录。</p><div class="actions">' +
     btn("export", "导出备份") +
     btn("import", "导入备份") +
     '</div><input type="file" accept=".json,application/json" id="file" hidden><p id="account-msg" role="status"></p><h3>装到 iPhone</h3><p>在 Safari 打开网站，点分享菜单，选择「添加到主屏幕」。</p><p><a href="SOURCES.md" target="_blank" rel="noopener">地图与目的地资料来源 ↗</a></p>';

@@ -352,6 +352,7 @@
           })
           .finally(() => (streetPending = false));
       }
+      const camera = { clip, scale, px, scope: state.scope };
       const status =
         streetEngine?.paintStreets(c, {
           clip,
@@ -361,7 +362,9 @@
           h,
           scope: state.scope,
           transit: state.transit,
+          railway: state.railway,
         }) || (streetRetry > Date.now() ? "offline" : "loading");
+      if (state.transit) streetEngine?.paintMetro(c, camera, paint);
       const notice =
         status === "loading"
           ? "街道加载中"
@@ -1250,7 +1253,11 @@
         oldY = cy;
       w = root.clientWidth;
       h = root.clientHeight;
-      px = Math.min(3, window.devicePixelRatio || 1, Math.sqrt(12000000 / (w * h)));
+      px = Math.min(
+        3,
+        window.devicePixelRatio || 1,
+        Math.sqrt(12000000 / (w * h)),
+      );
       canvas.width = Math.ceil(w * px);
       canvas.height = Math.ceil(h * px);
       fit();
@@ -1293,6 +1300,8 @@
             baseScale,
             Math.max(baseScale, maxScale),
           );
+        else if (state.transit && p.type === "city")
+          scale = (512 * 2 ** 9) / 360;
         else scale = Math.max(baseScale * 2.5, scale);
         limit();
         paint();
