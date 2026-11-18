@@ -455,7 +455,7 @@ function mount(root, { places, world, onSelect, stats = false }) {
       container: root,
       style,
       center: [105, 25],
-      zoom: stats ? 0.7 : 1.1,
+      zoom: stats ? 0.7 : 1.5,
       maxZoom: 19,
       minZoom: 0,
       attributionControl: { compact: true },
@@ -510,7 +510,7 @@ function mount(root, { places, world, onSelect, stats = false }) {
       if (
         (p.type === "country" &&
           (p.labelRank || 5) <= Math.max(2, Math.floor(map.getZoom()) + 1)) ||
-        !g ||
+        (!g && p.type !== "country") ||
         props.status ||
         props.selected ||
         (p.type !== "country" && map.getZoom() > 4)
@@ -661,7 +661,7 @@ function mount(root, { places, world, onSelect, stats = false }) {
   function reset() {
     map.flyTo({
       center: state.scope === "china" ? [104, 35] : [105, 25],
-      zoom: state.scope === "china" ? 2.5 : 1.1,
+      zoom: state.scope === "china" ? 2.5 : 1.5,
       pitch: 0,
       bearing: 0,
       duration: reduced() ? 0 : 1100,
