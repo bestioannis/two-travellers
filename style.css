@@ -1075,3 +1075,124 @@ body[data-view="map"] #loading:not([hidden]) {
   background: #375e56;
   color: white;
 }
+
+.globe-atlas {
+  height: 100%;
+  width: 100%;
+  background: #071323;
+}
+.globe-atlas .maplibregl-canvas {
+  touch-action: none;
+  outline: none;
+}
+.globe-atlas .maplibregl-ctrl-bottom-right {
+  bottom: 145px;
+  right: 8px;
+}
+.globe-atlas .maplibregl-ctrl-attrib {
+  max-width: 75vw;
+  font-size: 9px;
+}
+#sheet.place-sheet {
+  position: fixed;
+  top: auto;
+  bottom: 88px;
+  left: 18px;
+  right: auto;
+  margin: 0;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  max-height: 40vh;
+  border: 1px solid #ffffff88;
+  border-radius: 22px;
+  background: #fffcf4f5;
+  box-shadow: 0 12px 55px #0005;
+  animation: place-arrive 0.25s ease-out;
+  z-index: 12;
+}
+body:has(#sheet.place-sheet[open]) {
+  overflow: auto;
+}
+#sheet.place-sheet h2 {
+  margin-top: 2px;
+  font-size: 24px;
+}
+#sheet.place-sheet .quick-status {
+  margin-top: 8px;
+}
+@keyframes place-arrive {
+  from {
+    transform: translateY(28px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@media (max-width: 760px) {
+  #sheet.place-sheet {
+    left: 10px;
+    bottom: calc(82px + env(safe-area-inset-bottom));
+    width: calc(100vw - 20px);
+    max-width: none;
+    max-height: 34vh;
+    padding: 14px;
+  }
+  body[data-view="map"] .map-zoom {
+    bottom: calc(var(--base) + 138px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #sheet.place-sheet {
+    animation: none;
+  }
+}
+#sheet.place-sheet {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.globe-atlas .maplibregl-ctrl-top-right {
+  top: 125px;
+  right: 8px;
+}
+.globe-atlas .maplibregl-ctrl-bottom-right {
+  bottom: 0;
+  right: 0;
+  max-width: 100%;
+}
+.globe-atlas .maplibregl-ctrl-attrib {
+  max-width: 100%;
+  font-size: 8px;
+  line-height: 12px;
+  background: #fffcf4c9;
+}
+#railway {
+  width: auto;
+  height: auto;
+  padding: 6px 10px;
+  border: 1px solid #b8c4b8;
+  border-radius: 20px;
+  font: inherit;
+  font-size: 12px;
+  background: #fffaf0;
+  color: #3c554b;
+  white-space: nowrap;
+}
+#railway[aria-pressed="true"] {
+  background: #375e56;
+  color: white;
+}
+body[data-view="map"] #map-page .map-head {
+  flex-wrap: wrap;
+  max-width: calc(100vw - 20px);
+}
+@media (max-width: 430px) {
+  .map-head select {
+    max-width: 102px;
+  }
+  #transit,
+  #railway {
+    padding: 6px 7px;
+  }
+}

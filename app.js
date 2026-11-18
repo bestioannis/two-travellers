@@ -103,9 +103,12 @@ function notify(text, undo) {
 function handle(err) {
   notify(err.message || "操作失败，请重试");
 }
-function showSheet(label) {
+function showSheet(label, place = false) {
+  if ($("sheet").open) $("sheet").close();
+  $("sheet").classList.toggle("place-sheet", place);
   $("dialog-label").textContent = label;
-  if (!$("sheet").open) $("sheet").showModal();
+  if (place) $("sheet").show();
+  else $("sheet").showModal();
 }
 $("close").onclick = () => $("sheet").close();
 $("sheet").addEventListener("click", (e) => {
@@ -431,7 +434,10 @@ function showPlace(id, fly = false) {
     layers();
     navigate();
     controller?.focus(id);
-  } else mapUpdate();
+  } else {
+    mapUpdate();
+    controller?.focus(id);
+  }
   const r = S.records()[id] || { note: "", date: "", status: "" };
   const status = r.status;
   const links = [];
@@ -462,7 +468,7 @@ function showPlace(id, fly = false) {
   if (p.heritageUrl) link("遗产资料", p.heritageUrl);
   if (p.contextUrl) link("国家背景来源", p.contextUrl);
   if (p.sourceUrl) link("地点资料", p.sourceUrl);
-  showSheet(types[p.type] + "  /  " + countryLabel(p));
+  showSheet(types[p.type] + "  /  " + countryLabel(p), true);
   $("detail").innerHTML =
     "<h2>" +
     esc(p.name) +
@@ -484,12 +490,23 @@ function showPlace(id, fly = false) {
       : "<p>填写后，点上方「去过」或「想去」保存。</p>") +
     "</details>" +
     countryJournal(p) +
-    (p.type === "country" ? "" : btn("street-view", "在地图中查看街道 ↗")) +
+    (p.type === "country" ? "" : btn("street-view", "放大查看周边 ↗")) +
     "<p>" +
     esc(p.overview || p.name + "位于" + p.country + "。") +
     "</p>" +
     (p.sights ? "<h3>景点与周边</h3><p>" + esc(p.sights) + "</p>" : "") +
-    (p.tip ? "<h3>旅行提示</h3><p>" + esc(p.tip) + "</p>" : "") +
+    (p.tip
+      ? "<h3>旅行提示</h3><p>" +
+        esc(p.tip) +
+        "</p>" +
+        (p.tipSource
+          ? '<p class="tip-source"><a target="_blank" rel="noopener noreferrer" href="' +
+            esc(p.tipSource) +
+            '">' +
+            esc(p.tipSourceLabel) +
+            " ↗</a></p>"
+          : "")
+      : "") +
     '<div class="actions">' +
     links.join("") +
     "</div>" +
@@ -538,7 +555,7 @@ document.body.addEventListener("click", (e) => {
     if (page === "map" && markMode !== "browse" && b.closest("#results")) {
       $("results").hidden = true;
       chooseOnMap(b.dataset.place);
-    } else showPlace(b.dataset.place, !!b.closest("#results"));
+    } else showPlace(b.dataset.place, true);
   }
   if (!e.target.closest(".search-wrap")) $("results").hidden = true;
 });
@@ -653,14 +670,27 @@ async function boot() {
   layers();
   navigate();
   try {
-    const [atlas, world, extra] = await Promise.all(
-      ["atlas.json", "world.json", "extra.json"].map(async (url) => {
-        const r = await fetch(url);
-        if (!r.ok) throw Error(url);
-        return r.json();
-      }),
+    const [atlas, world, extra, tips] = await Promise.all(
+      ["atlas.json", "world.json", "extra.json", "travel-tips.json"].map(
+        async (url) => {
+          const r = await fetch(url);
+          if (!r.ok) throw Error(url);
+          return r.json();
+        },
+      ),
     );
     places = [...new Map([...atlas, ...extra].map((p) => [p.id, p])).values()];
+    const frequencies = new Map();
+    for (const p of places)
+      if (p.tip) frequencies.set(p.tip, (frequencies.get(p.tip) || 0) + 1);
+    for (const p of places) {
+      const reviewed = tips[p.id];
+      if (reviewed) {
+        p.tip = reviewed.text;
+        p.tipSource = reviewed.source;
+        p.tipSourceLabel = reviewed.sourceLabel;
+      } else if ((frequencies.get(p.tip) || 0) > 30) p.tip = "";
+    }
     worldShapes = world;
     for (const p of places) {
       byId.set(p.id, p);

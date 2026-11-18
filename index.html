@@ -17,6 +17,7 @@
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="map.css" />
+    <link rel="stylesheet" href="maplibre-gl.css" />
   </head>
   <body data-view="map">
     <header>
@@ -68,19 +69,19 @@
               <button type="button" id="transit" aria-pressed="true">
                 地铁 / 轻轨
               </button>
+              <button
+                id="railway"
+                type="button"
+                aria-label="显示普通铁路"
+                aria-pressed="false"
+              >
+                铁路
+              </button>
               <select id="layer" aria-label="地图标记层级"></select>
             </div>
             <div class="canvas-frame">
               <div id="atlas" aria-label="可交互旅行地图"></div>
               <div class="map-zoom">
-                <button
-                  id="railway"
-                  type="button"
-                  aria-label="显示普通铁路"
-                  aria-pressed="false"
-                >
-                  铁路
-                </button>
                 <button id="plus" aria-label="放大">＋</button
                 ><button id="minus" aria-label="缩小">−</button
                 ><button id="reset" aria-label="重置视图">
@@ -151,7 +152,9 @@
     <div id="toast" role="status"></div>
     <script src="config.js"></script>
     <script src="store.js"></script>
-    <script src="map.js"></script>
-    <script src="app.js"></script>
+    <script type="module">
+      await import("./globe.js");
+      await import("./app.js");
+    </script>
   </body>
 </html>

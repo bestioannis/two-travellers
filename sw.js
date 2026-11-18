@@ -1,5 +1,5 @@
-const version="5417b02ee80e06";
-const files=["./SOURCES.md", "./app.js", "./assets/apple-touch-icon.png", "./assets/icon-192.png", "./assets/icon-512.png", "./assets/kyoto.jpg", "./assets/paris.jpg", "./assets/singapore.jpg", "./atlas.json", "./config.js", "./detail/index.json", "./extra.json", "./index.html", "./manifest.webmanifest", "./map.css", "./map.js", "./metro-index.json", "./metro.js", "./physical/china-terrain.jpg", "./physical/terrain.jpg", "./physical/water.json", "./store.js", "./street.js", "./style.css", "./world.json", "./vendor/street/pbf.js", "./vendor/street/point.js", "./vendor/street/vector.js"];
+const version="13ed99bf0a9174";
+const files=["./SOURCES.md", "./app.js", "./assets/apple-touch-icon.png", "./assets/icon-192.png", "./assets/icon-512.png", "./assets/kyoto.jpg", "./assets/paris.jpg", "./assets/singapore.jpg", "./atlas.json", "./config.js", "./detail/index.json", "./extra.json", "./globe.js", "./index.html", "./manifest.webmanifest", "./map.css", "./map.js", "./maplibre-LICENSE.txt", "./maplibre-gl-worker.mjs", "./maplibre-gl.css", "./maplibre-gl.mjs", "./metro-index.json", "./metro.js", "./physical/china-terrain.jpg", "./physical/terrain.jpg", "./physical/water.json", "./store.js", "./street.js", "./style.css", "./travel-tips.json", "./world.json", "./vendor/street/pbf.js", "./vendor/street/point.js", "./vendor/street/vector.js"];
 
 const prefix='two-travellers:'+self.registration.scope+':';
 const cacheName=prefix+version;

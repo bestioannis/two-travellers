@@ -44,3 +44,10 @@
 国家及地区目录将 Natural Earth 国界按地区编码合并，保留同一目的地下已有地点记录的索引。台湾图层含 22 个县市和 64 个主要景点。县市边界来自[国土测绘中心行政区界线](https://data.gov.tw/dataset/7442)，参照 2025 年县市边界。景点名称、坐标与部分介绍来自[交通部观光署观光资讯资料库](https://data.gov.tw/dataset/7777)。县市与景点资料按[政府资料开放授权条款第 1 版](https://data.gov.tw/license)使用，已简化边界、转换文字并整理旅行提示。
 
 海南省直辖县级行政区、香港十八区和澳门八个区域的多边形来自[阿里云 DataV 行政区划边界](https://datav.aliyun.com/portal/school/atlas/area_selector)。地铁与轻轨线路、颜色和车站来自 [OpenStreetMap Subway Validator](https://maps.mail.ru/osm/tools/subways/latest/) 2026-11-16 的全球网络快照。几何和颜色均由 OpenStreetMap 贡献者维护，遵循 [ODbL](https://www.openstreetmap.org/copyright)。线路无配色时使用中性灰。数据按视野分块读取，普通铁路使用独立开关。
+
+
+## 卫星地球与目的地旅行提示
+
+球形地图由 MapLibre GL JS 6.19.0 渲染，按 BSD 3-Clause 授权使用，完整许可证见 maplibre-LICENSE.txt。卫星影像来自 Esri World Imagery，署名包括 Esri、Vantor、Earthstar Geographics 和 GIS User Community。影像随视野按需加载，分辨率与拍摄日期随区域不同。
+
+travel-tips.json 包含 148 条目的地提示。中文维基导游的改写内容保留每篇文章的修订链接，遵循 CC BY-SA 4.0 授权；遗产景点另附 UNESCO 世界遗产中心资料链接。应用以本文件中的专属提示替换对应旧文本，并隐藏高频重复的默认旅行提示。尚无专属提示的地点保留旅行指南入口。海南及港澳的县区边界已改用 DataV 各行政区单独文件中的精细坐标。
