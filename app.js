@@ -1,4 +1,5 @@
-"use strict";
+import { routesForCity } from "./flights.js";
+("use strict");
 const $ = (id) => document.getElementById(id);
 const paths = {
   bag: '<rect x="3" y="7" width="18" height="14" rx="3"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M7 8v12m10-12v12m-5-9 2 2-2 2-2-2z"/>',
@@ -69,6 +70,8 @@ let places = [],
   scope = "world",
   transit = true,
   railway = false,
+  basemap = "satellite",
+  flightRequest = 0,
   layer = "country",
   selected = "",
   filter = "visited",
@@ -140,6 +143,7 @@ function mapUpdate() {
     layer,
     transit,
     railway,
+    basemap,
     records: S.records(),
     selected,
   });
@@ -167,6 +171,15 @@ $("transit").onclick = () => {
   $("transit").setAttribute("aria-pressed", String(transit));
   if (transit) notify("地铁按线路颜色显示，放大可查看站名");
   mapUpdate();
+};
+$("basemap").onchange = () => {
+  basemap = $("basemap").value;
+  mapUpdate();
+};
+$("clear-flights").onclick = () => {
+  flightRequest++;
+  controller?.clearFlights();
+  $("clear-flights").hidden = true;
 };
 $("railway").onclick = () => {
   railway = !railway;
@@ -426,11 +439,14 @@ function showPlace(id, fly = false) {
   const p = byId.get(id);
   if (!p) return;
   selected = id;
+  flightRequest++;
+  controller?.clearFlights();
+  $("clear-flights").hidden = true;
   $("results").hidden = true;
   if (fly) {
     location.hash = "map";
     scope = p.country === "中国" && p.type !== "country" ? "china" : "world";
-    layer = p.type;
+    layer = p.tourist ? "city" : p.type;
     layers();
     navigate();
     controller?.focus(id);
@@ -491,6 +507,10 @@ function showPlace(id, fly = false) {
     "</details>" +
     countryJournal(p) +
     (p.type === "country" ? "" : btn("street-view", "放大查看周边 ↗")) +
+    (p.tourist
+      ? btn("city-flights", "查看出发航线") +
+        '<div id="flight-info" aria-live="polite"></div>'
+      : "") +
     "<p>" +
     esc(p.overview || p.name + "位于" + p.country + "。") +
     "</p>" +
@@ -514,12 +534,48 @@ function showPlace(id, fly = false) {
       ? '<div class="actions">' + btn("remove", "移除标记") + "</div>"
       : "");
   $("note").value = r.note;
+  if ($("city-flights"))
+    $("city-flights").onclick = async () => {
+      const token = ++flightRequest;
+      $("city-flights").disabled = true;
+      $("flight-info").textContent = "正在读取城市机场与航线…";
+      try {
+        const data = await routesForCity(p);
+        if (token !== flightRequest || selected !== id) return;
+        $("flight-info").innerHTML =
+          "<p>" +
+          esc(data.codes.join(" / ") || "暂无匹配机场") +
+          " · 已收录 " +
+          data.rows.length +
+          " 个直飞目的地</p><p>资料更新 " +
+          esc(data.generated) +
+          "。基于公开运输记录，覆盖范围有限，航线运营可能变化。</p>" +
+          "<details><summary>目的地列表</summary>" +
+          data.rows
+            .map((a) => "<p>" + esc(a.city) + " · " + esc(a.code) + "</p>")
+            .join("") +
+          '</details><p><a href="https://airportmiles.com/api" target="_blank" rel="noopener">AirportMiles 航线来源 ↗</a></p>';
+        if (data.rows.length) {
+          scope = "world";
+          layers();
+          mapUpdate();
+          controller?.showFlights(data, [+p.lon, +p.lat]);
+          $("clear-flights").hidden = false;
+        }
+      } catch (error) {
+        if (token === flightRequest)
+          $("flight-info").textContent = error.message;
+      } finally {
+        if (token === flightRequest && $("city-flights"))
+          $("city-flights").disabled = false;
+      }
+    };
   if ($("street-view"))
     $("street-view").onclick = () => {
       $("sheet").close();
       location.hash = "map";
       scope = p.country === "中国" && p.type !== "country" ? "china" : "world";
-      layer = p.type;
+      layer = p.tourist ? "city" : p.type;
       layers();
       navigate();
       controller?.focus(id, { street: true });
@@ -566,7 +622,11 @@ function search() {
     return;
   }
   const rows = places
-    .filter((p) => p.lookup.includes(q))
+    .filter(
+      (p) =>
+        p.lookup.includes(q) &&
+        (p.type !== "city" || p.tourist || S.records()[p.id]),
+    )
     .sort(
       (a, b) =>
         (b.name.toLowerCase() === q) - (a.name.toLowerCase() === q) ||
@@ -670,16 +730,22 @@ async function boot() {
   layers();
   navigate();
   try {
-    const [atlas, world, extra, tips] = await Promise.all(
-      ["atlas.json", "world.json", "extra.json", "travel-tips.json"].map(
-        async (url) => {
-          const r = await fetch(url);
-          if (!r.ok) throw Error(url);
-          return r.json();
-        },
-      ),
+    const [atlas, world, extra, tips, tourist] = await Promise.all(
+      [
+        "atlas.json",
+        "world.json",
+        "extra.json",
+        "travel-tips.json",
+        "tourist-cities.json",
+      ].map(async (url) => {
+        const r = await fetch(url);
+        if (!r.ok) throw Error(url);
+        return r.json();
+      }),
     );
     places = [...new Map([...atlas, ...extra].map((p) => [p.id, p])).values()];
+    const touristIds = new Set(tourist.cities);
+    for (const p of places) p.tourist = touristIds.has(p.id);
     const frequencies = new Map();
     for (const p of places)
       if (p.tip) frequencies.set(p.tip, (frequencies.get(p.tip) || 0) + 1);

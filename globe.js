@@ -15,6 +15,7 @@ const getJSON = (url) =>
   });
 const detailIndex = getJSON("./detail/index.json");
 const metroIndex = getJSON("./metro-index.json");
+const normalLayers = await getJSON("./normal-style.json");
 const font = ["Noto Sans Regular"];
 // The existing atlas stores actual coordinates as longitude+180, 90-latitude.
 function geometry(path) {
@@ -119,17 +120,27 @@ function mount(root, { places, world, onSelect, stats = false }) {
       selected: "",
       transit: !stats,
       railway: false,
+      basemap: "satellite",
     },
     loaded = false,
     disposed = false,
     revision = 0,
-    metroRevision = 0;
+    metroRevision = 0,
+    geometryVersion = 0,
+    lastDataKey = "",
+    lastModeKey = "",
+    metroKey = "",
+    railLoaded = false;
   const byId = new Map(places.map((p) => [p.id, p])),
     coarse = new Map(),
     fine = new Map(),
     metroFiles = new Map();
-  for (const p of places) if (p.path) coarse.set(p.id, geometry(p.path));
-  const china = coarse.get("country-CN");
+  function shape(p) {
+    if (!p?.path) return null;
+    if (!coarse.has(p.id)) coarse.set(p.id, geometry(p.path));
+    return fine.get(p.id) || coarse.get(p.id);
+  }
+  const touristIds = new Set(places.filter((p) => p.tourist).map((p) => p.id));
   const style = {
     version: 8,
     glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
@@ -159,16 +170,9 @@ function mount(root, { places, world, onSelect, stats = false }) {
         maxzoom: 20,
         attribution: "OSM Subway Validator",
       },
-      foreign: {
-        type: "geojson",
-        data: collection(
-          world
-            .filter(
-              (_, i) => !byId.get("country-CN").worldIds.includes(String(i)),
-            )
-            .map((p) => feature(geometry(p))),
-        ),
-      },
+      railwayOverview: { type: "geojson", data: empty(), tolerance: 0.8 },
+      flights: { type: "geojson", data: empty(), tolerance: 0.2 },
+      airports: { type: "geojson", data: empty() },
     },
     layers: [
       {
@@ -176,18 +180,12 @@ function mount(root, { places, world, onSelect, stats = false }) {
         type: "background",
         paint: { "background-color": "#071323" },
       },
+      ...normalLayers,
       {
         id: "satellite",
         type: "raster",
         source: "satellite",
         paint: { "raster-fade-duration": 250 },
-      },
-      {
-        id: "outside-china",
-        type: "fill",
-        source: "foreign",
-        layout: { visibility: "none" },
-        paint: { "fill-color": "#071323", "fill-opacity": 1 },
       },
       {
         id: "roads",
@@ -214,15 +212,32 @@ function mount(root, { places, world, onSelect, stats = false }) {
         },
       },
       {
+        id: "railway-overview",
+        type: "line",
+        source: "railwayOverview",
+        minzoom: 5,
+        maxzoom: 9,
+        layout: {
+          visibility: "none",
+          "line-cap": "round",
+          "line-join": "round",
+        },
+        paint: {
+          "line-color": "#efb652",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 5, 1, 8, 1.6],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0.9, 9, 0],
+        },
+      },
+      {
         id: "railways",
         type: "line",
         source: "streets",
         "source-layer": "transportation",
-        minzoom: 4,
+        minzoom: 5,
         filter: ["==", ["get", "class"], "rail"],
         layout: { visibility: "none", "line-cap": "round" },
         paint: {
-          "line-color": "#d8deef",
+          "line-color": "#efb652",
           "line-width": [
             "interpolate",
             ["linear"],
@@ -234,7 +249,6 @@ function mount(root, { places, world, onSelect, stats = false }) {
             17,
             3,
           ],
-          "line-dasharray": [3, 2],
         },
       },
       {
@@ -402,9 +416,49 @@ function mount(root, { places, world, onSelect, stats = false }) {
         },
       },
       {
+        id: "flight-routes",
+        type: "line",
+        source: "flights",
+        layout: { "line-cap": "round" },
+        paint: {
+          "line-color": "#77d7f3",
+          "line-width": 1.3,
+          "line-opacity": 0.65,
+        },
+      },
+      {
+        id: "flight-airports",
+        type: "circle",
+        source: "airports",
+        paint: {
+          "circle-color": "#a8efff",
+          "circle-radius": 3,
+          "circle-stroke-color": "#062d42",
+          "circle-stroke-width": 1,
+        },
+      },
+      {
+        id: "flight-airport-labels",
+        type: "symbol",
+        source: "airports",
+        minzoom: 3,
+        layout: {
+          "text-field": ["get", "code"],
+          "text-font": font,
+          "text-size": 11,
+          "text-offset": [0, 0.8],
+        },
+        paint: {
+          "text-color": "white",
+          "text-halo-color": "#163249",
+          "text-halo-width": 1,
+        },
+      },
+      {
         id: "destination-dots",
         type: "circle",
         source: "pins",
+        filter: ["!=", ["get", "kind"], "country"],
         paint: {
           "circle-color": color,
           "circle-radius": [
@@ -458,6 +512,12 @@ function mount(root, { places, world, onSelect, stats = false }) {
       zoom: stats ? 0.7 : 1.5,
       maxZoom: 19,
       minZoom: 0,
+      maxPitch: 0,
+      dragRotate: false,
+      pitchWithRotate: false,
+      touchPitch: false,
+      pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
+      maxTileCacheSize: 80,
       attributionControl: { compact: true },
       canvasContextAttributes: { antialias: true },
       renderWorldCopies: false,
@@ -467,10 +527,10 @@ function mount(root, { places, world, onSelect, stats = false }) {
       "设备未能启动立体地图，请在 Safari 中开启 WebGL 并重新打开。";
     throw error;
   }
-  map.addControl(
-    new maplibregl.NavigationControl({ showZoom: false, visualizePitch: true }),
-    "top-right",
-  );
+  map.touchZoomRotate.disableRotation();
+  map.dragRotate.disable();
+  map.touchPitch.disable();
+  map.keyboard.disableRotation();
   const observer = new ResizeObserver(() => map.resize());
   observer.observe(root);
   const reduced = () =>
@@ -485,18 +545,91 @@ function mount(root, { places, world, onSelect, stats = false }) {
           ["cn-810000", "cn-820000"].includes(p.id) ||
           (p.type === "county" && p.parent === "海南省")
         );
+      if (state.layer === "city") return touristIds.has(p.id);
       return p.type === state.layer;
     });
   }
   function render() {
     if (!loaded || disposed) return;
-    const list = listed(),
-      polygons = [],
+    const modeKey = [
+      state.scope,
+      state.basemap,
+      state.transit,
+      state.railway,
+    ].join("|");
+    if (modeKey !== lastModeKey) {
+      lastModeKey = modeKey;
+      const normal = state.basemap === "normal";
+      if (root.dataset.scope !== state.scope)
+        map.setProjection({
+          type: state.scope === "china" ? "mercator" : "globe",
+        });
+      root.dataset.scope = state.scope;
+      map.setLayoutProperty(
+        "satellite",
+        "visibility",
+        normal ? "none" : "visible",
+      );
+      for (const layer of normalLayers)
+        map.setLayoutProperty(
+          layer.id,
+          "visibility",
+          normal ? "visible" : "none",
+        );
+      for (const id of ["railways", "railway-overview", "railway-stations"])
+        map.setLayoutProperty(
+          id,
+          "visibility",
+          state.railway ? "visible" : "none",
+        );
+      for (const id of [
+        "metro-casing",
+        "metro-lines",
+        "metro-stations",
+        "metro-labels",
+      ])
+        map.setLayoutProperty(
+          id,
+          "visibility",
+          state.transit ? "visible" : "none",
+        );
+      for (const id of ["place-labels", "destination-names"]) {
+        map.setPaintProperty(id, "text-color", normal ? "#213f4b" : "#fff7e9");
+        map.setPaintProperty(
+          id,
+          "text-halo-color",
+          normal ? "#fffdf6" : "#152d33",
+        );
+      }
+      if (state.railway && !railLoaded) {
+        railLoaded = true;
+        getJSON("./railways-overview.json")
+          .then((data) => {
+            if (!disposed) map.getSource("railwayOverview").setData(data);
+          })
+          .catch(() => {
+            railLoaded = false;
+          });
+      }
+    }
+    const band = Math.min(5, Math.floor(map.getZoom()));
+    const key = [
+      state.scope,
+      state.layer,
+      state.selected,
+      JSON.stringify(state.records),
+      geometryVersion,
+      band,
+    ].join("|");
+    if (key === lastDataKey) return;
+    lastDataKey = key;
+    const polygons = [],
       points = [];
-    for (const p of list) {
+    for (const p of listed()) {
       const props = {
         id: p.id,
         name: p.name,
+        kind: p.type,
         status: state.records[p.id]?.status || "",
         selected: state.selected === p.id,
         label: p.name,
@@ -505,15 +638,15 @@ function mount(root, { places, world, onSelect, stats = false }) {
             ? "flag-" + p.countryCode
             : "",
       };
-      const g = fine.get(p.id) || coarse.get(p.id);
+      // Cities are point destinations even when they also have an administrative record.
+      const g = state.layer === "city" ? null : shape(p);
       if (g) polygons.push(feature(g, props));
       if (
-        (p.type === "country" &&
-          (p.labelRank || 5) <= Math.max(2, Math.floor(map.getZoom()) + 1)) ||
+        (p.type === "country" && (p.labelRank || 5) <= Math.max(2, band + 1)) ||
         (!g && p.type !== "country") ||
         props.status ||
         props.selected ||
-        (p.type !== "country" && map.getZoom() > 4)
+        (p.type !== "country" && band > 4)
       )
         points.push(
           feature({ type: "Point", coordinates: [+p.lon, +p.lat] }, props),
@@ -521,42 +654,6 @@ function mount(root, { places, world, onSelect, stats = false }) {
     }
     map.getSource("areas").setData(collection(polygons));
     map.getSource("pins").setData(collection(points));
-    map.setLayoutProperty(
-      "outside-china",
-      "visibility",
-      state.scope === "china" ? "visible" : "none",
-    );
-    for (const id of ["railways", "railway-stations"])
-      map.setLayoutProperty(
-        id,
-        "visibility",
-        state.railway ? "visible" : "none",
-      );
-    for (const id of [
-      "metro-casing",
-      "metro-lines",
-      "metro-stations",
-      "metro-labels",
-    ])
-      map.setLayoutProperty(
-        id,
-        "visibility",
-        state.transit ? "visible" : "none",
-      );
-    for (const id of [
-      "roads",
-      "railways",
-      "railway-stations",
-      "place-labels",
-    ]) {
-      const original = style.layers.find((l) => l.id === id).filter;
-      map.setFilter(
-        id,
-        state.scope === "china"
-          ? ["all", original, ["within", china]]
-          : original,
-      );
-    }
   }
   function overlaps(box) {
     const b = map.getBounds();
@@ -584,36 +681,57 @@ function mount(root, { places, world, onSelect, stats = false }) {
     return pending.get(file);
   }
   async function refine() {
-    if (!loaded || disposed || map.getZoom() < 3) return;
+    if (!loaded || disposed || state.layer === "city" || map.getZoom() < 4)
+      return;
     const token = ++revision;
     try {
       const index = await detailIndex;
-      const list = listed(),
-        ids = new Set(list.map((p) => p.id)),
+      const list = listed().filter(
+        (p) =>
+          !fine.has(p.id) && (p.id === state.selected || map.getZoom() >= 6),
+      );
+      const ids = new Set(list.map((p) => p.id)),
         worldIds = new Set(list.flatMap((p) => p.worldIds || []));
       const entries = [
         ...index.world.filter((e) => worldIds.has(e.id)),
         ...index.regions.filter((e) => ids.has(e.id)),
         ...index.prefectures.filter((e) => ids.has(e.id)),
-      ].filter((e) => overlaps(e.bbox));
+      ]
+        .filter((e) => overlaps(e.bbox))
+        .slice(0, 24);
       const files = [...new Set(entries.map((e) => e.file))];
+      let changed = false;
       for (let i = 0; i < files.length; i += 2) {
         const data = await Promise.all(files.slice(i, i + 2).map(fetchDetail));
-        if (disposed || token !== revision) return;
-        for (const chunk of data)
-          for (const [id, path] of Object.entries(chunk)) {
-            if (ids.has(id)) fine.set(id, geometry(path));
+        if (disposed || token !== revision) {
+          if (changed && !disposed) {
+            geometryVersion++;
+            render();
           }
-        for (const p of list.filter((p) => p.worldIds)) {
-          const shapes = p.worldIds
-            .map((id) => {
-              const meta = index.world.find((e) => e.id === id);
-              return meta && detailed.get(meta.file)?.[id];
-            })
-            .filter(Boolean);
-          if (shapes.length === p.worldIds.length)
-            fine.set(p.id, geometry(shapes.join("")));
+          return;
         }
+        const wanted = new Set(entries.map((e) => e.id));
+        for (const chunk of data)
+          for (const [id, path] of Object.entries(chunk))
+            if (ids.has(id) && wanted.has(id) && !fine.has(id)) {
+              fine.set(id, geometry(path));
+              changed = true;
+            }
+      }
+      for (const p of list.filter((p) => p.worldIds)) {
+        const paths = p.worldIds
+          .map((id) => {
+            const meta = index.world.find((e) => e.id === id);
+            return meta && detailed.get(meta.file)?.[id];
+          })
+          .filter(Boolean);
+        if (paths.length === p.worldIds.length) {
+          fine.set(p.id, geometry(paths.join("")));
+          changed = true;
+        }
+      }
+      if (changed) {
+        geometryVersion++;
         render();
       }
     } catch (error) {
@@ -621,39 +739,56 @@ function mount(root, { places, world, onSelect, stats = false }) {
     }
   }
   async function metros() {
-    const token = ++metroRevision;
     if (!loaded || !state.transit || disposed || map.getZoom() < 5) return;
+    const token = ++metroRevision;
     try {
       const index = await metroIndex;
       const files = index
         .filter(([, boxes]) => boxes.some(overlaps))
         .map(([file]) => file);
+      const key = files.join("|");
+      if (key === metroKey) return;
       await Promise.all(
         files.map(async (file) => {
-          if (!metroFiles.has(file)) metroFiles.set(file, await getJSON(file));
+          if (!metroFiles.has(file))
+            metroFiles.set(
+              file,
+              getJSON(file)
+                .then((cities) =>
+                  collection(
+                    cities.flatMap(([, box, lines, stations]) => [
+                      ...lines.map(([bbox, color, ref, line]) =>
+                        feature(
+                          { type: "LineString", coordinates: decodeLine(line) },
+                          { color: color || "#999fa3", ref },
+                        ),
+                      ),
+                      ...stations.map(([lon, lat, name]) =>
+                        feature(
+                          { type: "Point", coordinates: [lon, lat] },
+                          { name },
+                        ),
+                      ),
+                    ]),
+                  ),
+                )
+                .catch((error) => {
+                  metroFiles.delete(file);
+                  throw error;
+                }),
+            );
+          await metroFiles.get(file);
         }),
       );
-      if (disposed) return;
-      if (token !== metroRevision) return;
-      const features = [];
-      for (const file of files)
-        for (const [, box, lines, stations] of metroFiles.get(file)) {
-          if (!overlaps(box)) continue;
-          for (const [bbox, color, ref, line] of lines) {
-            if (overlaps(bbox))
-              features.push(
-                feature(
-                  { type: "LineString", coordinates: decodeLine(line) },
-                  { color: color || "#999fa3", ref },
-                ),
-              );
-          }
-          for (const [lon, lat, name] of stations)
-            features.push(
-              feature({ type: "Point", coordinates: [lon, lat] }, { name }),
-            );
-        }
-      map.getSource("metro").setData(collection(features));
+      if (disposed || token !== metroRevision) return;
+      const data = await Promise.all(files.map((file) => metroFiles.get(file)));
+      metroKey = key;
+      map
+        .getSource("metro")
+        .setData(collection(data.flatMap((d) => d.features)));
+      for (const file of metroFiles.keys())
+        if (metroFiles.size > 6 && !files.includes(file))
+          metroFiles.delete(file);
     } catch (error) {
       console.warn("Metro network unavailable", error.message);
     }
@@ -664,7 +799,8 @@ function mount(root, { places, world, onSelect, stats = false }) {
       zoom: state.scope === "china" ? 2.5 : 1.5,
       pitch: 0,
       bearing: 0,
-      duration: reduced() ? 0 : 1100,
+      padding: 0,
+      duration: reduced() ? 0 : 800,
     });
   }
   function focus(id, { street = false } = {}) {
@@ -672,7 +808,23 @@ function mount(root, { places, world, onSelect, stats = false }) {
     if (!p) return;
     state.selected = id;
     render();
-    const g = fine.get(id) || coarse.get(id);
+    let g = shape(p);
+    if (p.type === "country" && g) {
+      const candidates = g.coordinates.map((poly) => ({
+        poly,
+        b: boundsOf({ coordinates: [poly] }),
+      }));
+      candidates.sort(
+        (a, b) =>
+          (b.b[2] - b.b[0]) *
+            (b.b[3] - b.b[1]) *
+            Math.cos(((b.b[1] + b.b[3]) * Math.PI) / 360) -
+          (a.b[2] - a.b[0]) *
+            (a.b[3] - a.b[1]) *
+            Math.cos(((a.b[1] + a.b[3]) * Math.PI) / 360),
+      );
+      g = { type: "MultiPolygon", coordinates: [candidates[0].poly] };
+    }
     const padding = {
       top: 145,
       bottom: root.clientHeight > 600 ? 260 : 70,
@@ -683,23 +835,50 @@ function mount(root, { places, world, onSelect, stats = false }) {
       center: [+p.lon, +p.lat],
       zoom: street ? 15 : p.type === "sight" ? 13 : 10,
     };
-    if (g && !street) {
+    if (g && !street && (p.type === "country" || state.layer !== "city")) {
       const b = boundsOf(g);
       if (b[2] - b[0] < 300) {
-        const camera = map.cameraForBounds(
-          [
-            [b[0], b[1]],
-            [b[2], b[3]],
-          ],
-          { padding, maxZoom: p.type === "country" ? 5 : 11 },
+        // Compute a stable extent fit even while the globe is facing another continent.
+        const mercY = (lat) =>
+          Math.log(
+            Math.tan(
+              Math.PI / 4 + (Math.max(-85, Math.min(85, lat)) * Math.PI) / 360,
+            ),
+          );
+        const y1 = mercY(b[1]),
+          y2 = mercY(b[3]);
+        const width = Math.max(
+          100,
+          root.clientWidth - padding.left - padding.right,
         );
-        if (camera) target = camera;
+        const height = Math.max(
+          100,
+          root.clientHeight - padding.top - padding.bottom,
+        );
+        const zx = Math.log2(
+          width / (512 * Math.max(0.00001, (b[2] - b[0]) / 360)),
+        );
+        const zy = Math.log2(
+          height / (512 * Math.max(0.00001, (y2 - y1) / (2 * Math.PI))),
+        );
+        target = {
+          center: [
+            (b[0] + b[2]) / 2,
+            ((2 * Math.atan(Math.exp((y1 + y2) / 2)) - Math.PI / 2) * 180) /
+              Math.PI,
+          ],
+          zoom: Math.max(
+            0,
+            Math.min(zx, zy, p.type === "country" ? 5 : 11) - 0.15,
+          ),
+        };
       }
     }
     map.flyTo({
       ...target,
       padding,
-      duration: reduced() ? 0 : 1450,
+      retainPadding: false,
+      duration: reduced() ? 0 : 1000,
       curve: 1.45,
       pitch: 0,
       bearing: 0,
@@ -751,6 +930,7 @@ function mount(root, { places, world, onSelect, stats = false }) {
     }
   });
   map.on("mousemove", (e) => {
+    if (map.isMoving()) return;
     map.getCanvas().style.cursor = map.queryRenderedFeatures(e.point, {
       layers: ["destination-dots", "area-hit"],
     }).length
@@ -768,6 +948,22 @@ function mount(root, { places, world, onSelect, stats = false }) {
     },
     focus,
     reset,
+    showFlights(data, center) {
+      map.getSource("flights").setData(data.routes);
+      map.getSource("airports").setData(data.airports);
+      map.flyTo({
+        center,
+        zoom: 1.4,
+        padding: 0,
+        bearing: 0,
+        pitch: 0,
+        duration: 1000,
+      });
+    },
+    clearFlights() {
+      map.getSource("flights")?.setData(empty());
+      map.getSource("airports")?.setData(empty());
+    },
     zoom(k) {
       map.zoomTo(map.getZoom() + Math.log2(k), { duration: 300 });
     },

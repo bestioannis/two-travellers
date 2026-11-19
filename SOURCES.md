@@ -51,3 +51,16 @@
 球形地图由 MapLibre GL JS 6.19.0 渲染，按 BSD 3-Clause 授权使用，完整许可证见 maplibre-LICENSE.txt。卫星影像来自 Esri World Imagery，署名包括 Esri、Vantor、Earthstar Geographics 和 GIS User Community。影像随视野按需加载，分辨率与拍摄日期随区域不同。
 
 travel-tips.json 包含 148 条目的地提示。中文维基导游的改写内容保留每篇文章的修订链接，遵循 CC BY-SA 4.0 授权；遗产景点另附 UNESCO 世界遗产中心资料链接。应用以本文件中的专属提示替换对应旧文本，并隐藏高频重复的默认旅行提示。尚无专属提示的地点保留旅行指南入口。海南及港澳的县区边界已改用 DataV 各行政区单独文件中的精细坐标。
+
+
+## 旅行城市、航线、星空与铁路概览（2026-11-19）
+
+旅行城市层使用 tourist-cities.json 中的 538 个目的地，按国家的主要旅游门户、历史文化城市与度假目的地整理，保留对应 Wikivoyage 国家指南链接供核对。这是精选目录，不是客流排名，也不表示未列出的城市不值得旅行；既有记录不会删除。
+
+普通地图的配色与图层基于 [OpenFreeMap Liberty](https://github.com/hyperknot/openfreemap) 样式调整，底图数据 © OpenStreetMap 贡献者，按 ODbL 使用。
+
+星空背景取自 NASA Scientific Visualization Studio 的 [Deep Star Maps 2020](https://svs.gsfc.nasa.gov/4851/)，采用真实恒星资料制作的全天星图（NASA/Goddard Space Flight Center Scientific Visualization Studio；Gaia / ESA）。这是固定背景图，不是实时天文定位。
+
+铁路低缩放概览来自 [Natural Earth 1:10m Railroads](https://github.com/nvkelso/natural-earth-vector/blob/master/geojson/ne_10m_railroads.geojson)，公有领域数据。应用简化为概览线，放大时渐隐并由 OpenStreetMap 矢量铁路接替。铁路与地铁均从缩放级别 5 开始显示；铁路统一金色实线，不代表班次或运营状态。
+
+flight-network.json 取自 [AirportMiles 公开航线资料](https://airportmiles.com/api)，资料快照日期 2026-11-04，保留 20,767 条有客运记录的机场连接与 4,031 个机场，仅显示航线，不包含票价。原资料由美国 DOT、Eurostat 及各国公开运输统计汇集；国家、年份和机场覆盖不完整，历史运输记录不保证当前在营，也不是完整实时航班时刻表。数据文件保留 sources 与 licenseNote 原始署名、来源及许可说明；各路线保留统计期间和来源。机场按城市群或邻近机场匹配并在页面列明代码，路线连接按大圆弧绘制。

@@ -77,10 +77,17 @@
               >
                 铁路
               </button>
+              <select id="basemap" aria-label="底图样式">
+                <option value="satellite">卫星</option>
+                <option value="normal">地图</option>
+              </select>
               <select id="layer" aria-label="地图标记层级"></select>
             </div>
             <div class="canvas-frame">
               <div id="atlas" aria-label="可交互旅行地图"></div>
+              <button id="clear-flights" class="clear-flights" hidden>
+                收起航线
+              </button>
               <div class="map-zoom">
                 <button id="plus" aria-label="放大">＋</button
                 ><button id="minus" aria-label="缩小">−</button
